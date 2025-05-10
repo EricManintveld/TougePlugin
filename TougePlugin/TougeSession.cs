@@ -63,11 +63,18 @@ public class TougeSession
             {
                 // If the result of the first two races is a tie, race until there is a winner.
                 // Sudden death style.
+                bool isChallengerLeading = true; // inital state, challenger as leader
+
                 while (result.Outcome == RaceOutcome.Tie)
                 {
-                    // Keep racing, and stop when there is a winner of disconnect.
-                    Race race = _raceFactory(Challenger, Challenged);
+                    EntryCar leader = isChallengerLeading ? Challenger : Challenged;
+                    EntryCar follower = isChallengerLeading ? Challenged : Challenger;
+
+                    Race race = _raceFactory(leader, follower);
                     result = await race.RaceAsync();
+
+                    // swap leader and follower
+                    isChallengerLeading = !isChallengerLeading;
                 }
 
                 if (result.Outcome != RaceOutcome.Disconnected)
