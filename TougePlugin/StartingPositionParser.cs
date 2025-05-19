@@ -37,6 +37,11 @@ public static class StartingAreaParser
                 areas.Add([slot1, slot2]);
                 i += 4; // Skip next 4 lines
             }
+            else if (Regex.IsMatch(line, @"^\[[a-zA-Z0-9_]+\]$"))
+            {
+                // It's a section-like header, but not in the expected [name_digits] format
+                throw new FormatException($"Malformed block header at line {i + 1}: '{line}'. Did you forget to add a numeric suffix like '_1'?");
+            }
             else if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
             {
                 throw new FormatException($"Unexpected line outside of a block at line {i + 1}: '{line}'");
