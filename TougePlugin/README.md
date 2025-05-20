@@ -1,4 +1,4 @@
-# Cat Mouse Touge Plugin.
+# Touge Plugin.
 
 A plugin for Assetto Corsa servers that enables cat-and-mouse-style **touge** racing with an engaging tie-breaker ruleset. Designed for competitive head-to-head driving with a configurable format. Find some live example servers running the plugin [here](https://assetto.scratchedclan.nl/servers).
 
@@ -122,4 +122,9 @@ postgresqlConnectionString: "Host={IP/URL};Port={Port};Username={Username};Passw
 - This is a AssettoServer plugin.
 	- Tested on [v0.0.55-pre25](https://github.com/compujuckel/AssettoServer/releases/tag/v0.0.55-pre25)
 - UI and other plugin features may evolve — stay tuned for updates.
+
+  ## Planned features
+  - Configurable finish line, so the plugin is not dependent on the track mod to have timing lines. Allowing users to define the start area and finish line themselves.
+  - More rulesets.
+  - Improved lap validation.
 
