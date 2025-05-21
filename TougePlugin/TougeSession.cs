@@ -23,7 +23,7 @@ public class TougeSession
         Tie = 3,
     }
 
-    private enum HudState
+    private enum SessionState
     {
         Off = 0,
         FirstTwo = 1,
@@ -67,19 +67,19 @@ public class TougeSession
         try
         {
             // Do the first two races.
-            SendStandings(HudState.FirstTwo);
+            SendStandings(SessionState.FirstTwo);
             RaceResult result = await FirstTwoRaceAsync();
 
             // If the result of the first two races is a tie, race until there is a winner.
             if (result.Outcome == RaceOutcome.Tie)
             {
-                SendStandings(HudState.SuddenDeath);
+                SendStandings(SessionState.SuddenDeath);
                 result = await RunSuddenDeathRacesAsync(result);
             }
 
             if (result.Outcome != RaceOutcome.Disconnected)
             {
-                UpdateStandings(result.ResultCar!, 2, HudState.Finished);
+                UpdateStandings(result.ResultCar!, 2, SessionState.Finished);
                 UpdateEloAsync(result.ResultCar!);
 
                 EntryCar loser = result.ResultCar! == Challenged ? Challenger : Challenged;
@@ -150,13 +150,13 @@ public class TougeSession
     {
         if (result.Outcome == RaceOutcome.Win)
         {
-            UpdateStandings(result.ResultCar!, raceIndex, HudState.FirstTwo);
+            UpdateStandings(result.ResultCar!, raceIndex, SessionState.FirstTwo);
             winCounter++;
         }
         else
         {
             // Tie case.
-            UpdateStandings(null, raceIndex, HudState.FirstTwo);
+            UpdateStandings(null, raceIndex, SessionState.FirstTwo);
         }
     }
 
@@ -211,7 +211,7 @@ public class TougeSession
         // Turn off and reset hud
         Array.Fill(challengerStandings, (int)RaceResultCounter.Tbd);
         Array.Fill(challengedStandings, (int)RaceResultCounter.Tbd);
-        SendStandings(HudState.Off);
+        SendStandings(SessionState.Off);
     }
 
     private async void UpdateEloAsync(EntryCar? winner)
@@ -289,7 +289,7 @@ public class TougeSession
         return performance;
     }
 
-    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, HudState hudState)
+    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, SessionState hudState)
     {
         // Update the standings arrays
         // Maybe just store the winner in a list? Not 2. And figure out by Client how the score should be sent.
@@ -314,9 +314,9 @@ public class TougeSession
         SendStandings(hudState);
     }
 
-    private void SendStandings(HudState hudState)
+    private void SendStandings(SessionState hudState)
     {
-        Challenger.Client!.SendPacket(new StandingPacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], HudState = (int)hudState });
-        Challenged.Client!.SendPacket(new StandingPacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], HudState = (int)hudState });
+        Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], SessionState = (int)hudState });
+        Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], SessionState = (int)hudState });
     }
 }

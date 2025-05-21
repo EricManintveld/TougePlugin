@@ -1,7 +1,33 @@
 local finishLine = {{-39.9,456.9},{-49.5,454.7}}
-local previousPos = {{0.0, 0.0},{0.0, 0.0}}
+local previousPos = nil
 
-local isLookingForFinish = true -- Toggle for this script
+local isLookingForFinish = false -- Toggle for this script
+
+local car = ac.getCar(0)
+
+local SessionStates = {
+    Off = 0,
+    FirstTwo = 1,
+    SuddenDeath = 2,
+    Finished = 3,
+}
+
+-- Events
+local sessionStateEvent = ac.OnlineEvent(
+    {
+        ac.StructItem.key('AS_SessionState'),
+        result1 = ac.StructItem.int32(),
+        result2 = ac.StructItem.int32(),
+        suddenDeathResult = ac.StructItem.int32(),
+        sessionState = ac.StructItem.int32()
+    }, function (sender, message)  
+        if message.sessionState == SessionStates.FirstTwo or message.sessionState == SessionStates.SuddenDeath then
+            isLookingForFinish = true
+        else
+            isLookingForFinish = false
+        end
+    end)
+
 
 function GetOrientation(p, q, r)
     local val = (q[2] - p[2]) * (r[1] - q[1]) - (q[1] - p[1]) * (r[2] - q[2])
@@ -27,8 +53,12 @@ function AreIntersecting(p1, q1, p2, q2)
 end
 
 function script.update(dt)
-    local currentPos = car.position
-    if AreIntersecting({previousPos.x, previousPos.y}, {currentPos.x, currentPos.y}, finishLine[1], finishLine[2]) then
-        print("Crossed line!")
+    if car ~= nil and isLookingForFinish then
+        local currentPos = car.position
+        local currentPos2D = {currentPos.x, currentPos.y}
+        if previousPos ~= nil and AreIntersecting({previousPos[1], previousPos[2]}, currentPos2D, finishLine[1], finishLine[2]) then
+            print("Crossed line!")
+        end
+        previousPos = currentPos2D
     end
 end
