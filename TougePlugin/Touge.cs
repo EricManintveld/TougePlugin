@@ -77,10 +77,11 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
 
         database = new GenericDatabase(_connectionFactory);
 
-        _cspClientMessageTypeManager.RegisterOnlineEvent<PlayerStatsPacket>(OnPlayerStatsPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<InitializationPacket>(OnInitializationPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<InvitePacket>(OnInvitePacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<LobbyStatusPacket>(OnLobbyStatusPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<ForfeitPacket>(OnForfeitPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<FinishPacket>(OnFinishPacket);
 
         // Read starting positions from file
         string trackName = _serverConfig.FullTrackName;
@@ -136,12 +137,12 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _scriptProvider.AddScript(reconnectScript, scriptName);
     }
 
-    private async void OnPlayerStatsPacket(ACTcpClient client, PlayerStatsPacket packet)
+    private async void OnInitializationPacket(ACTcpClient client, InitializationPacket packet)
     {
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new PlayerStatsPacket { Elo = elo, RacesCompleted = racesCompleted });
+        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.useTrackFinish });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)
@@ -221,6 +222,12 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     {
         Race? activeRace = GetActiveRace(sender.EntryCar);
         activeRace?.ForfeitPlayer(sender);
+    }
+
+    private void OnFinishPacket(ACTcpClient sender, FinishPacket packet)
+    {
+        Race? activeRace = GetActiveRace(sender.EntryCar);
+        activeRace?.OnClientLapCompleted(sender, null);
     }
 
     private bool IsInTougeSession(EntryCar car)

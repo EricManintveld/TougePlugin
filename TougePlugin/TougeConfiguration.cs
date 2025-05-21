@@ -35,4 +35,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "Connection string to PostgreSQL database. Can be left empty if isDbLocalMode = true.")]
     public string? postgresqlConnectionString;
+
+    [YamlMember(Description = "Use the track's built in finish line as course end point.")]
+    public bool useTrackFinish = true;
 }

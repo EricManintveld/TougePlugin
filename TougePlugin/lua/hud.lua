@@ -99,18 +99,18 @@ web.loadRemoteAssets(fontsURL, function(err, folder)
 end)
 
 -- Events
-local standingEvent = ac.OnlineEvent(
+local sessionStateEvent = ac.OnlineEvent(
     {
-        ac.StructItem.key('AS_Standing'),
+        ac.StructItem.key('AS_SessionState'),
         result1 = ac.StructItem.int32(),
         result2 = ac.StructItem.int32(),
         suddenDeathResult = ac.StructItem.int32(),
-        hudState = ac.StructItem.int32()
-    }, function (sender, message)  
+        sessionState = ac.StructItem.int32()
+    }, function (sender, message)
         standings[1] = message.result1
         standings[2] = message.result2
         standings[3] = message.suddenDeathResult
-        currentHudState = message.hudState
+        currentHudState = message.sessionState
     end)
 
 -- elo helper funciton
@@ -165,11 +165,12 @@ local forfeitEvent = ac.OnlineEvent(
     end
 )
 
-local playerStatsEvent = ac.OnlineEvent(
+local initializationEvent = ac.OnlineEvent(
     {
-        ac.StructItem.key('AS_PlayerStats'),
+        ac.StructItem.key('AS_Initialization'),
         elo = ac.StructItem.int32(),
-        racesCompleted = ac.StructItem.int32()
+        racesCompleted = ac.StructItem.int32(),
+        useTrackFinish = ac.StructItem.boolean(),
     }, function (sender, message)
         SetElo(message.elo)
         if message.racesCompleted >= 3 then
@@ -227,7 +228,7 @@ local lobbyStatusEvent = ac.OnlineEvent({
 end)
 
 -- Set the variables
-playerStatsEvent({elo = elo, racesCompleted = racesCompleted})
+initializationEvent({elo = elo, racesCompleted = racesCompleted})
 
 -- Utility functions
 

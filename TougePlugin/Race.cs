@@ -44,15 +44,18 @@ public class Race
         LeaderName = Leader.Client?.Name!;
         FollowerName = Follower.Client?.Name!;
 
-        // Event handling
-        Leader.Client!.LapCompleted += OnClientLapCompleted;
-        Follower.Client!.LapCompleted += OnClientLapCompleted;
-        Leader.Client.Disconnecting += OnClientDisconnected;
-        Follower.Client.Disconnecting += OnClientDisconnected;
-
         _entryCarManager = entryCarManager;
         _configuration = configuration;
         _plugin = plugin;
+
+        if (_configuration.useTrackFinish)
+        {
+            Leader.Client!.LapCompleted += OnClientLapCompleted;
+            Follower.Client!.LapCompleted += OnClientLapCompleted;
+        }
+
+        Leader.Client!.Disconnecting += OnClientDisconnected;
+        Follower.Client!.Disconnecting += OnClientDisconnected;
     }
 
     public async Task<RaceResult> RaceAsync()
@@ -128,7 +131,10 @@ public class Race
             }
 
             // Start the race.
-            // Let the cars do a lap/complete the course.
+            if (!_configuration.useTrackFinish)
+            {
+                NotifyLookForFinish(true);
+            }
             Task completed = await Task.WhenAny(secondLapCompleted.Task, _disconnected.Task, _followerFirst.Task);
 
             if (completed == _disconnected.Task)
@@ -179,6 +185,7 @@ public class Race
         Follower.Client!.LapCompleted -= OnClientLapCompleted;
         Leader.Client.Disconnecting -= OnClientDisconnected;
         Follower.Client.Disconnecting -= OnClientDisconnected;
+        NotifyLookForFinish(false);
     }
 
     private void SendMessage(string message)
@@ -196,7 +203,7 @@ public class Race
         await TeleportToStartAsync(Leader, Follower, startingArea);
     }
 
-    private void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs args)
+    public void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs? args)
     {
         var car = sender.EntryCar;
         if (car == Leader)
@@ -229,9 +236,13 @@ public class Race
     internal void ForfeitPlayer(ACTcpClient sender)
     {
         _disconnected.TrySetResult(sender);
+        if (!_configuration.useTrackFinish)
+        {
+            sender.SendPacket(new FinishPacket { LookForFinish = false });
+        }
     }
 
-    private async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Dictionary<string, Vector3>[] startingArea)
+    private static async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Dictionary<string, Vector3>[] startingArea)
     {
         Leader.Client!.SendPacket(new TeleportPacket
         {
@@ -390,5 +401,17 @@ public class Race
             }
         }
         return startingArea;
+    }
+
+    private void NotifyLookForFinish(bool lookForFinish)
+    {
+        Leader.Client!.SendPacket(new FinishPacket
+        {
+            LookForFinish = lookForFinish,
+        });
+        Follower.Client!.SendPacket(new FinishPacket
+        {
+            LookForFinish = lookForFinish,
+        });
     }
 }

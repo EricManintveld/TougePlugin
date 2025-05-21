@@ -67,13 +67,13 @@ public class TougeSession
         try
         {
             // Do the first two races.
-            SendStandings(SessionState.FirstTwo);
+            SendSessionState(SessionState.FirstTwo);
             RaceResult result = await FirstTwoRaceAsync();
 
             // If the result of the first two races is a tie, race until there is a winner.
             if (result.Outcome == RaceOutcome.Tie)
             {
-                SendStandings(SessionState.SuddenDeath);
+                SendSessionState(SessionState.SuddenDeath);
                 result = await RunSuddenDeathRacesAsync(result);
             }
 
@@ -211,7 +211,7 @@ public class TougeSession
         // Turn off and reset hud
         Array.Fill(challengerStandings, (int)RaceResultCounter.Tbd);
         Array.Fill(challengedStandings, (int)RaceResultCounter.Tbd);
-        SendStandings(SessionState.Off);
+        SendSessionState(SessionState.Off);
     }
 
     private async void UpdateEloAsync(EntryCar? winner)
@@ -311,10 +311,10 @@ public class TougeSession
         }
 
         // Now update client side.
-        SendStandings(hudState);
+        SendSessionState(hudState);
     }
 
-    private void SendStandings(SessionState hudState)
+    private void SendSessionState(SessionState hudState)
     {
         Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], SessionState = (int)hudState });
         Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], SessionState = (int)hudState });
