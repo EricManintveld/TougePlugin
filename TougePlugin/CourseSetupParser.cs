@@ -39,7 +39,13 @@ public static partial class CourseSetupParser
                 if (!name.Equals(trackName, StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Debug($"Ignoring because name does not match. {trackName} != {name}");
-                    i += 4; // Skip unrelated block lines
+
+                    // Always skip 5 lines if there's a 'finish_line' after the track block
+                    if (i + 5 < lines.Length && lines[i + 5].Trim().StartsWith("finish_line"))
+                        i += 5;
+                    else
+                        i += 4;
+
                     continue;
                 }
 
@@ -112,7 +118,7 @@ public static partial class CourseSetupParser
 
         return new Vector2(
             float.Parse(match.Groups[1].Value),
-            float.Parse(match.Groups[2].Value)
+            float.Parse(match.Groups[3].Value)
         );
     }
 

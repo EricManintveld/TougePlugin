@@ -22,6 +22,7 @@ local finishEvent = ac.OnlineEvent(
         if message.lookForFinish and not useTrackFinish then
             isLookingForFinish = true
             print("Looking for finish line!")
+            print(finishLine)
         else
             isLookingForFinish = false
             print("NOT looking for finish line!")
@@ -84,7 +85,7 @@ end
 function script.update(dt)
     if car ~= nil and isLookingForFinish then
         local currentPos = car.position
-        local currentPos2D = {currentPos.x, currentPos.y}
+        local currentPos2D = {currentPos.x, currentPos.z}
         if finishLine ~= nil and previousPos ~= nil and AreIntersecting({previousPos[1], previousPos[2]}, currentPos2D, {finishLine[1].x, finishLine[1].y}, {finishLine[2].x, finishLine[2].y}) then
             print("Crossed line!")
             finishEvent({lookForFinish = true})

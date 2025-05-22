@@ -7,7 +7,6 @@ using Microsoft.Extensions.Hosting;
 using AssettoServer.Network.Tcp;
 using TougePlugin.Packets;
 using TougePlugin.Database;
-using System.Numerics;
 
 namespace TougePlugin;
 
