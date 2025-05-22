@@ -1,4 +1,4 @@
-local finishLine = {{-39.9,456.9},{-49.5,454.7}}
+local finishLine = {vec2(0, 0), vec2(0, 0)}
 local previousPos = nil
 
 local useTrackFinish = true
@@ -40,6 +40,22 @@ local initializationEvent = ac.OnlineEvent(
     end
 )
 
+local courseEvent = ac.OnlineEvent(
+    {
+        ac.StructItem.key('AS_FinishLine'),
+        finishPoint1 = ac.StructItem.vec2(),
+        finishPoint2 = ac.StructItem.vec2(),
+    },
+    function(sender, message)
+        if sender ~= nil then
+            return
+        end
+        finishLine[1] = message.finishPoint1
+        finishLine[2] = message.finishPoint2
+        print("Set new finish line!")
+    end
+)
+
 -- Helper functions
 function GetOrientation(p, q, r)
     local val = (q[2] - p[2]) * (r[1] - q[1]) - (q[1] - p[1]) * (r[2] - q[2])
@@ -69,7 +85,7 @@ function script.update(dt)
     if car ~= nil and isLookingForFinish then
         local currentPos = car.position
         local currentPos2D = {currentPos.x, currentPos.y}
-        if previousPos ~= nil and AreIntersecting({previousPos[1], previousPos[2]}, currentPos2D, finishLine[1], finishLine[2]) then
+        if finishLine ~= nil and previousPos ~= nil and AreIntersecting({previousPos[1], previousPos[2]}, currentPos2D, {finishLine[1].x, finishLine[1].y}, {finishLine[2].x, finishLine[2].y}) then
             print("Crossed line!")
             finishEvent({lookForFinish = true})
             currentPos2D = nil -- This way previousPos will be nil
