@@ -22,10 +22,10 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ACServerConfiguration _serverConfig;
 
-    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_starting_areas.ini");
+    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.ini");
 
     public readonly IDatabase database;
-    public readonly Dictionary<string, Vector3>[][] startingPositions;
+    public readonly Course[] tougeCourses;
 
     public Touge(
         TougeConfiguration configuration,
@@ -83,15 +83,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _cspClientMessageTypeManager.RegisterOnlineEvent<ForfeitPacket>(OnForfeitPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<FinishPacket>(OnFinishPacket);
 
-        // Read starting positions from file
-        string trackName = _serverConfig.FullTrackName;
-        trackName = trackName.Substring(trackName.LastIndexOf('/') + 1);
-        startingPositions = getStartingPositions(trackName);
-        if (startingPositions.Length == 0)
-        {
-            // There are no valid starting areas.
-            throw new Exception($"Did not find any valid starting areas in cfg/touge_starting_areas.ini. Please define some for the track: {trackName}");
-        }
+        tougeCourses = GetCourses();
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -286,16 +278,28 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         client?.SendPacket(new NotificationPacket { Message = message });
     }
 
-    private Dictionary<string, Vector3>[][] getStartingPositions(string trackName)
+    private Course[] GetCourses()
     {
+        // Read starting positions from file
+        string trackName = _serverConfig.FullTrackName;
+        trackName = trackName.Substring(trackName.LastIndexOf('/') + 1);
+        
         if (!File.Exists(startingPositionsFile))
         {
             // Create the file
             File.WriteAllText(startingPositionsFile, "[full_track_name_1]\nleader_pos =\nleader_heading =\nchaser_pos =\nchaser_heading =");
-            throw new Exception("No touge starting areas defined in cfg/touge_starting_areas.ini!");
+            throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
         }
 
-        return StartingAreaParser.Parse("cfg/touge_starting_areas.ini", trackName);
+        Course[] courses = CourseSetupParser.Parse(startingPositionsFile, trackName, _configuration.useTrackFinish);
+
+        if (courses.Length == 0)
+        {
+            // There are no valid starting areas.
+            throw new Exception($"Did not find any valid starting areas in {startingPositionsFile}. Please define some for the track: {trackName}");
+        }
+
+        return courses;
     }
 }
 

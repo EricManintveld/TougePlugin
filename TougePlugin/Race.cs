@@ -9,7 +9,7 @@ namespace TougePlugin;
 public class Race
 {
     public EntryCar Leader { get; }
-    public EntryCar Follower { get;  }
+    public EntryCar Follower { get; }
 
     private readonly EntryCarManager _entryCarManager;
     private readonly TougeConfiguration _configuration;
@@ -65,10 +65,10 @@ public class Race
 
         try
         {
-            Dictionary<string, Vector3>[] startingArea = await GetStartingAreaAsync();
+            Course course = await GetCourseAsync();
 
             // First teleport players to their starting positions.
-            await TeleportToStartAsync(Leader, Follower, startingArea);
+            await TeleportToStartAsync(Leader, Follower, course);
 
             SendMessage("Race starting soon...");
             await Task.Delay(3000);
@@ -83,7 +83,7 @@ public class Race
                 {
                     if (!_configuration.isRollingStart)
                     {
-                        JumpstartResult jumpstart = AreInStartingPos(startingArea);
+                        JumpstartResult jumpstart = AreInStartingPos(GetStartingPositions(course));
                         if (jumpstart != JumpstartResult.None)
                         {
                             if (jumpstart == JumpstartResult.Both)
@@ -199,8 +199,8 @@ public class Race
         SendMessage("Returning both players to their starting positions.");
         SendMessage("Race restarting soon...");
         await Task.Delay(3000);
-        Dictionary<string, Vector3>[] startingArea = await GetStartingAreaAsync();
-        await TeleportToStartAsync(Leader, Follower, startingArea);
+        Course course = await GetCourseAsync();
+        await TeleportToStartAsync(Leader, Follower, course);
     }
 
     public void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs? args)
@@ -225,7 +225,7 @@ public class Race
 
         // Overtake, the follower finished earlier than leader.
         else if (FollowerSetLap && !LeaderSetLap)
-            _followerFirst.TrySetResult(true);    
+            _followerFirst.TrySetResult(true);
     }
 
     private void OnClientDisconnected(ACTcpClient sender, EventArgs args)
@@ -242,30 +242,31 @@ public class Race
         }
     }
 
-    private static async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Dictionary<string, Vector3>[] startingArea)
+    private static async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Course course)
     {
+        Dictionary<string, Vector3>[] startingPositions = GetStartingPositions(course);
         Leader.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingArea[0]["Position"],  
-            Direction = startingArea[0]["Direction"],  
+            Position = startingPositions[0]["Position"],
+            Direction = startingPositions[0]["Direction"],
         });
         Follower.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingArea[1]["Position"],
-            Direction = startingArea[1]["Direction"],
+            Position = startingPositions[1]["Position"],
+            Direction = startingPositions[1]["Direction"],
         });
 
         // Check if both cars have been teleported to their starting locations.
         bool isLeaderTeleported = false;
         bool isFollowerTeleported = false;
 
-        while (!isLeaderTeleported || !isFollowerTeleported)  
+        while (!isLeaderTeleported || !isFollowerTeleported)
         {
             Vector3 currentLeaderPos = Leader.Status.Position;
             Vector3 currentFollowerPos = Follower.Status.Position;
-            
-            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingArea[0]["Position"]);
-            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingArea[1]["Position"]);
+
+            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingPositions[0]["Position"]);
+            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingPositions[1]["Position"]);
 
             const float thresholdSquared = 50f;
 
@@ -276,7 +277,7 @@ public class Race
                 isFollowerTeleported = true;
             }
 
-            await Task.Delay(250); 
+            await Task.Delay(250);
         }
     }
 
@@ -344,15 +345,15 @@ public class Race
         return true;
     }
 
-    private Dictionary<string, Vector3>[]? FindClearStartArea()
+    private Course? FindClearStartArea()
     {
         // Loop over the list of starting positions in the cfg file
         // If you find a valid/clear starting pos, return that.
-        foreach (var startingArea in _plugin.startingPositions)
+        foreach (var course in _plugin.tougeCourses)
         {
-            if (IsStartPosClear(startingArea[0]["Position"]) && IsStartPosClear(startingArea[1]["Position"]))
+            if (IsStartPosClear(course.Leader["Position"]) && IsStartPosClear(course.Follower["Position"]))
             {
-                return startingArea;
+                return course;
             }
         }
         return null;
@@ -380,11 +381,11 @@ public class Race
         return true;
     }
 
-    private async Task<Dictionary<string, Vector3>[]> GetStartingAreaAsync()
+    private async Task<Course> GetCourseAsync()
     {
         // Get the startingArea here.
         int waitTime = 0;
-        Dictionary<string, Vector3>[]? startingArea = FindClearStartArea();
+        Course? startingArea = FindClearStartArea();
         while (startingArea == null)
         {
             // Wait for a short time before checking again to avoid blocking the thread
@@ -397,7 +398,7 @@ public class Race
             if (waitTime > 40)
             {
                 // Fallback after 10 seconds.
-                startingArea = _plugin.startingPositions[0];
+                startingArea = _plugin.tougeCourses[0];
             }
         }
         return startingArea;
@@ -413,5 +414,23 @@ public class Race
         {
             LookForFinish = lookForFinish,
         });
+    }
+
+    private static Dictionary<string, Vector3>[] GetStartingPositions(Course course)
+    {
+        var startingPositions = new[]
+            {
+                new Dictionary<string, Vector3>
+                {
+                    ["Position"] = course.Leader["Position"],
+                    ["Direction"] = course.Leader["Direction"]
+                },
+                new Dictionary<string, Vector3>
+                {
+                    ["Position"] = course.Follower["Position"],
+                    ["Direction"] = course.Follower["Direction"]
+                }
+            };
+        return startingPositions;
     }
 }
