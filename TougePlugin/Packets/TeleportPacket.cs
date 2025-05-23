@@ -8,6 +8,6 @@ public class TeleportPacket : OnlineEvent<TeleportPacket>
 {
     [OnlineEventField(Name = "position")]
     public Vector3 Position;
-    [OnlineEventField(Name = "direction")]
-    public Vector3 Direction;
+    [OnlineEventField(Name = "heading")]
+    public int Heading;
 }

@@ -1,6 +1,6 @@
 ﻿using AssettoServer.Server;
 
-namespace TougePlugin;
+namespace TougePlugin.Models;
 public enum RaceOutcome
 {
     Win,

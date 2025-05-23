@@ -2,6 +2,7 @@
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using Serilog;
+using TougePlugin.Models;
 using TougePlugin.Packets;
 
 namespace TougePlugin;
@@ -83,7 +84,7 @@ public class Race
                 {
                     if (!_configuration.isRollingStart)
                     {
-                        JumpstartResult jumpstart = AreInStartingPos(GetStartingPositions(course));
+                        JumpstartResult jumpstart = AreInStartingPos(course);
                         if (jumpstart != JumpstartResult.None)
                         {
                             if (jumpstart == JumpstartResult.Both)
@@ -244,16 +245,15 @@ public class Race
 
     private static async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Course course)
     {
-        Dictionary<string, Vector3>[] startingPositions = GetStartingPositions(course);
         Leader.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingPositions[0]["Position"],
-            Direction = startingPositions[0]["Direction"],
+            Position = course.Leader.Position,
+            Heading = course.Leader.Heading,
         });
         Follower.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingPositions[1]["Position"],
-            Direction = startingPositions[1]["Direction"],
+            Position = course.Follower.Position,
+            Heading = course.Follower.Heading,
         });
 
         // Check if both cars have been teleported to their starting locations.
@@ -265,8 +265,8 @@ public class Race
             Vector3 currentLeaderPos = Leader.Status.Position;
             Vector3 currentFollowerPos = Follower.Status.Position;
 
-            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingPositions[0]["Position"]);
-            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingPositions[1]["Position"]);
+            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
+            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
 
             const float thresholdSquared = 50f;
 
@@ -305,7 +305,7 @@ public class Race
     }
 
     // Check if the cars are still in their starting positions.
-    private JumpstartResult AreInStartingPos(Dictionary<string, Vector3>[] startingArea)
+    private JumpstartResult AreInStartingPos(Course course)
     {
         // Get the current position of each car.
         Vector3 currentLeaderPos = Leader.Status.Position;
@@ -313,8 +313,8 @@ public class Race
 
         // Check if they are the same as the original starting postion.
         // Or at least check if the difference is not larger than a threshold.
-        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingArea[0]["Position"]);
-        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingArea[1]["Position"]);
+        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
+        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
 
         const float thresholdSquared = 40f;
 
@@ -351,7 +351,7 @@ public class Race
         // If you find a valid/clear starting pos, return that.
         foreach (var course in _plugin.tougeCourses)
         {
-            if (IsStartPosClear(course.Leader["Position"]) && IsStartPosClear(course.Follower["Position"]))
+            if (IsStartPosClear(course.Leader.Position) && IsStartPosClear(course.Follower.Position))
             {
                 return course;
             }
@@ -414,24 +414,6 @@ public class Race
         {
             LookForFinish = lookForFinish,
         });
-    }
-
-    private static Dictionary<string, Vector3>[] GetStartingPositions(Course course)
-    {
-        var startingPositions = new[]
-            {
-                new Dictionary<string, Vector3>
-                {
-                    ["Position"] = course.Leader["Position"],
-                    ["Direction"] = course.Leader["Direction"]
-                },
-                new Dictionary<string, Vector3>
-                {
-                    ["Position"] = course.Follower["Position"],
-                    ["Direction"] = course.Follower["Direction"]
-                }
-            };
-        return startingPositions;
     }
 
     private void SendFinishLine(Course course)

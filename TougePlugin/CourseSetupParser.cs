@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using System.Text.RegularExpressions;
 using Serilog;
+using TougePlugin.Models;
 
 namespace TougePlugin;
 
@@ -122,7 +123,7 @@ public static partial class CourseSetupParser
         );
     }
 
-    private static Dictionary<string, Vector3> ParseSlot(string posLine, string headingLine, string expectedPosKey, string expectedHeadingKey, int baseLine)
+    private static CarSpawn ParseSlot(string posLine, string headingLine, string expectedPosKey, string expectedHeadingKey, int baseLine)
     {
         var posMatch = Regex.Match(posLine.Trim(), $@"^{expectedPosKey}\s*=\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$");
         var headingMatch = Regex.Match(headingLine.Trim(), $@"^{expectedHeadingKey}\s*=\s*(-?\d+\.?\d*)$");
@@ -136,16 +137,10 @@ public static partial class CourseSetupParser
         float x = float.Parse(posMatch.Groups[1].Value);
         float y = float.Parse(posMatch.Groups[2].Value);
         float z = float.Parse(posMatch.Groups[3].Value);
-        float headingDeg = 64f + float.Parse(headingMatch.Groups[1].Value); // Add the magic 64. Still don't know why.
-        float headingRad = headingDeg * MathF.PI / 180f;
+        int heading = int.Parse(headingMatch.Groups[1].Value);
+        Vector3 position = new(x, y, z);
 
-        Vector3 direction = new(MathF.Sin(headingRad), 0f, MathF.Cos(headingRad));
-
-        return new Dictionary<string, Vector3>
-        {
-            ["Position"] = new Vector3(x, y, z),
-            ["Direction"] = direction
-        };
+        return new CarSpawn(position, heading);
     }
 
     [GeneratedRegex(@"^\[finish_(.+?)_(\d+)\]$")]

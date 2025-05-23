@@ -1,7 +1,13 @@
-local supportAPI_physics = physics.setGentleStop ~= nil -- For disabling physics
+local supportAPI_physics = physics.setGentleStop ~= nil -- For disabling physics, not used I think but why not?
 local supportAPI_collision = physics.disableCarCollisions ~= nil
+local vec = {x=vec3(1,0,0),y=vec3(0,1,0),z=vec3(0,0,1),empty=vec3(),empty2=vec2()}
 
 local teleportTimer = nil
+
+local function dir3FromHeading(heading)
+    local h = math.rad(heading + ac.getCompassAngle(vec.z))
+    return vec3(-math.sin(h), 0, -math.cos(h))
+end
 
 function TeleportExec(pos, rot)
     if supportAPI_collision then physics.disableCarCollisions(0, true) end
@@ -18,15 +24,17 @@ local teleportEvent = ac.OnlineEvent(
     {
         ac.StructItem.key('AS_Teleport'),
         position = ac.StructItem.vec3(),
-        direction = ac.StructItem.vec3()
+        heading = ac.StructItem.int32(),
     },
     function(sender, message)
         if sender ~= nil then
             print("Sender is nil")
             return
         end
-
-        TeleportExec(message.position, message.direction)
+        print("Heading:")
+        print(message.heading)
+        local direction = dir3FromHeading(message.heading)
+        TeleportExec(message.position, direction)
     end
 )
 
