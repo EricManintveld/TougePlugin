@@ -28,11 +28,8 @@ local teleportEvent = ac.OnlineEvent(
     },
     function(sender, message)
         if sender ~= nil then
-            print("Sender is nil")
             return
         end
-        print("Heading:")
-        print(message.heading)
         local direction = dir3FromHeading(message.heading)
         TeleportExec(message.position, direction)
     end

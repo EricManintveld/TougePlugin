@@ -60,6 +60,7 @@ local notificationActivatedAt = nil
 
 local forfeitStartTime = nil
 local forfeitHoldDuration = 3.0 -- seconds
+local forfeitLockout = false
 
 local car = ac.getCar(0)
 
@@ -472,8 +473,12 @@ function script.drawUI()
     end
 
     -- Draw forfeit dialog
-    if forfeitStartTime ~= nil then
-        ui.transparentWindow("forfeitWindow", vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(222)), scaling.vec2(705,172), function ()
+    if forfeitStartTime ~= nil and currentHudState ~= HudStates.Off then
+        local windowPos = vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(222))
+        if hasIncomingNotification then
+            windowPos = vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(414))
+        end
+        ui.transparentWindow("forfeitWindow", windowPos, scaling.vec2(705,172), function ()
             -- Draw the notification
             ui.drawImage(playerCardPath, vec2(0,0), scaling.vec2(705,172))
             ui.pushDWriteFont(fontSemiBold)
@@ -506,16 +511,20 @@ function InputCheck()
     if ui.keyboardButtonPressed(ui.KeyIndex.H, false) and not ui.anyItemFocused() and not ui.anyItemActive() then
         hasTutorialHidden = not hasTutorialHidden
     end
-    if currentHudState then
+    if currentHudState ~= HudStates.Off then
         if ui.keyboardButtonDown(ui.KeyIndex.F) then
-            if not forfeitStartTime then
-                forfeitStartTime = os.clock()
-            elseif os.clock() - forfeitStartTime >= forfeitHoldDuration then
-                forfeitEvent({forfeit = true})
-                forfeitStartTime = nil -- reset so it doesn't trigger repeatedly
+            if not forfeitLockout then
+                if not forfeitStartTime then
+                    forfeitStartTime = os.clock()
+                elseif os.clock() - forfeitStartTime >= forfeitHoldDuration then
+                    forfeitEvent({forfeit = true})
+                    forfeitStartTime = nil -- reset so it doesn't trigger repeatedly
+                    forfeitLockout = true  -- prevent repeat forfeits on same hold
+                end
             end
         else
             forfeitStartTime = nil -- reset if key is released
+            forfeitLockout = false
         end
     end
 end
