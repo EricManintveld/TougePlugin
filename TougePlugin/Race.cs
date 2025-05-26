@@ -62,120 +62,26 @@ public class Race
 
     public async Task<RaceResult> RaceAsync()
     {
-        EntryCar? winner = null;
-
         try
         {
-            var setupTask = Task.Run(() => SetUpRaceAsync());
-            var forfeitTask = _forfeit.Task;
-             
-            var completedSetup = await Task.WhenAny(setupTask, forfeitTask);
-
-            if (completedSetup == forfeitTask)
-            {
-                SendMessage("Race cancelled due to player forfeit.");
-                return RaceResult.Disconnected(forfeitTask.Result.EntryCar);
-            }
-
-            Course? course = await setupTask;
-
+            Course? course = await InitializeRaceAsync();
             if (course == null)
             {
-                return RaceResult.Disconnected(null); // maybe instead of leader: null? because it is just a server issue.
+                return RaceResult.Disconnected(null);
             }
 
             SendMessage("Race starting soon...");
             if (await WaitWithForfeitAsync(Task.Delay(3000)))
                 return RaceResult.Disconnected(_forfeit.Task.Result.EntryCar);
 
-            // Race countdown.
-            while (!IsGo)
+            var countdownResult = await RunCountdownAsync(course);
+            if (countdownResult != null)
             {
-                byte signalStage = 0;
-                while (signalStage < 3)
-                {
-                    if (!_configuration.isRollingStart)
-                    {
-                        JumpstartResult jumpstart = AreInStartingPos(course);
-                        if (jumpstart != JumpstartResult.None)
-                        {
-                            if (jumpstart == JumpstartResult.Both)
-                            {
-                                SendMessage("Both players made a jumpstart.");
-                                await RestartRaceAsync();
-                                break;
-                            }
-                            else if (jumpstart == JumpstartResult.Follower)
-                            {
-                                SendMessage($"{FollowerName} made a jumpstart. {LeaderName} wins this race.");
-                                return RaceResult.Win(Leader);
-                            }
-                            else
-                            {
-                                SendMessage($"{LeaderName} made a jumpstart. {FollowerName} wins this race.");
-                                return RaceResult.Win(Follower);
-                            }
-                        }
-                    }
-
-                    if (signalStage == 0)
-                        _ = SendTimedMessageAsync("Ready...");
-                    else if (signalStage == 1)
-                        _ = SendTimedMessageAsync("Set...");
-                    else if (signalStage == 2)
-                    {
-                        if (_configuration.isRollingStart)
-                        {
-                            // Check if cars are close enough to each other to give a valid "Go!".
-                            if (!IsValidRollingStartPos())
-                            {
-                                SendMessage("Players are not close enough for a fair rolling start.");
-                                await RestartRaceAsync();
-                                break;
-                            }
-                        }
-                        _ = SendTimedMessageAsync("Go!");
-                        IsGo = true;
-                        break;
-                    }
-                    if (await WaitWithForfeitAsync(Task.Delay(1000)))
-                        return RaceResult.Disconnected(_forfeit.Task.Result.EntryCar);
-                    signalStage++;
-                }
+                return countdownResult;
             }
 
-            // Start the race.
-            if (!_configuration.useTrackFinish)
-            {
-                NotifyLookForFinish(true);
-            }
-            Task completedRace = await Task.WhenAny(secondLapCompleted.Task, _disconnected.Task, _followerFirst.Task);
-
-            if (completedRace == _disconnected.Task)
-            {
-                SendMessage("Race cancelled due to disconnection or forfeit.");
-                return RaceResult.Disconnected(_disconnected.Task.Result.EntryCar);
-            }
-
-            else
-            {
-                // Who wins logic
-                if (!FollowerSetLap)
-                {
-                    SendMessage($"{FollowerName} did not finish in time. {LeaderName} wins!");
-                    winner = Leader;
-                }
-                else if (completedRace == _followerFirst.Task)
-                {
-                    SendMessage($"{FollowerName} overtook {LeaderName}. {FollowerName} wins!");
-                    winner = Follower;
-                }
-                else
-                {
-                    SendMessage($"{LeaderName} did not pull away. It's a tie!");
-                    return RaceResult.Tie();
-                }
-            }
+            return await RunRaceAsync();
+            
         }
 
         catch (Exception e)
@@ -188,9 +94,120 @@ public class Race
         {
             FinishRace();
         }
+    }
 
-        // Implement null check here. If null return disconnect.
-        return RaceResult.Win(winner);
+    private async Task<Course?> InitializeRaceAsync()
+    {
+        var setupTask = Task.Run(() => SetUpRaceAsync());
+        var forfeitTask = _forfeit.Task;
+
+        var completedSetup = await Task.WhenAny(setupTask, forfeitTask);
+
+        if (completedSetup == forfeitTask)
+        {
+            SendMessage("Race cancelled due to player forfeit.");
+            return null;
+        }
+
+        Course? course = await setupTask;
+
+        if (course == null)
+        {
+            SendMessage("Teleportation failed. Race setup aborted.");
+            return null;
+        }
+
+        return course;
+    }
+
+    private async Task<RaceResult?> RunCountdownAsync(Course course)
+    {
+        while (!IsGo)
+        {
+            byte signalStage = 0;
+            while (signalStage < 3)
+            {
+                if (!_configuration.isRollingStart)
+                {
+                    JumpstartResult jumpstart = AreInStartingPos(course);
+                    if (jumpstart != JumpstartResult.None)
+                    {
+                        if (jumpstart == JumpstartResult.Both)
+                        {
+                            SendMessage("Both players made a jumpstart.");
+                            await RestartRaceAsync();
+                            break;
+                        }
+                        else if (jumpstart == JumpstartResult.Follower)
+                        {
+                            SendMessage($"{FollowerName} made a jumpstart. {LeaderName} wins this race.");
+                            return RaceResult.Win(Leader);
+                        }
+                        else
+                        {
+                            SendMessage($"{LeaderName} made a jumpstart. {FollowerName} wins this race.");
+                            return RaceResult.Win(Follower);
+                        }
+                    }
+                }
+
+                if (signalStage == 0)
+                    _ = SendTimedMessageAsync("Ready...");
+                else if (signalStage == 1)
+                    _ = SendTimedMessageAsync("Set...");
+                else if (signalStage == 2)
+                {
+                    if (_configuration.isRollingStart)
+                    {
+                        // Check if cars are close enough to each other to give a valid "Go!".
+                        if (!IsValidRollingStartPos())
+                        {
+                            SendMessage("Players are not close enough for a fair rolling start.");
+                            await RestartRaceAsync();
+                            break;
+                        }
+                    }
+                    _ = SendTimedMessageAsync("Go!");
+                    IsGo = true;
+                    break;
+                }
+                if (await WaitWithForfeitAsync(Task.Delay(1000)))
+                    return RaceResult.Disconnected(_forfeit.Task.Result.EntryCar);
+                signalStage++;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<RaceResult> RunRaceAsync()
+    {
+        if (!_configuration.useTrackFinish)
+        {
+            NotifyLookForFinish(true);
+        }
+        Task completedRace = await Task.WhenAny(secondLapCompleted.Task, _disconnected.Task, _followerFirst.Task);
+
+        if (completedRace == _disconnected.Task)
+        {
+            SendMessage("Race cancelled due to disconnection or forfeit.");
+            return RaceResult.Disconnected(_disconnected.Task.Result.EntryCar);
+        }
+        else if (!FollowerSetLap)
+        {
+            SendMessage($"{FollowerName} did not finish in time. {LeaderName} wins!");
+            return RaceResult.Win(Leader);
+        }    
+        else if (completedRace == _followerFirst.Task)
+        {
+            SendMessage($"{FollowerName} overtook {LeaderName}. {FollowerName} wins!");
+            return RaceResult.Win(Follower);
+        }
+        else
+        {
+            SendMessage($"{LeaderName} did not pull away. It's a tie!");
+            return RaceResult.Tie();
+        }
     }
 
     private void FinishRace()
