@@ -135,7 +135,7 @@ public class TougeSession
             {
                 // Someone disconnected or forfeited.
                 // Check if they won the first race or not.
-                if (result1.Outcome == RaceOutcome.Win && result1.ResultCar != result2.ResultCar)
+                if (result2.ResultCar != null && result1.Outcome == RaceOutcome.Win && result1.ResultCar != result2.ResultCar)
                 {
                     // The player who disconnected was not leading the standings.
                     // So the other player (who won race 1, is the overall winner)

@@ -1,4 +1,3 @@
-local supportAPI_physics = physics.setGentleStop ~= nil -- For disabling physics, not used I think but why not?
 local supportAPI_collision = physics.disableCarCollisions ~= nil
 local vec = {x=vec3(1,0,0),y=vec3(0,1,0),z=vec3(0,0,1),empty=vec3(),empty2=vec2()}
 

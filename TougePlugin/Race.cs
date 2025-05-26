@@ -77,7 +77,12 @@ public class Race
                 return RaceResult.Disconnected(forfeitTask.Result.EntryCar);
             }
 
-            Course course = await setupTask;
+            Course? course = await setupTask;
+
+            if (course == null)
+            {
+                return RaceResult.Disconnected(null); // maybe instead of leader: null? because it is just a server issue.
+            }
 
             SendMessage("Race starting soon...");
             if (await WaitWithForfeitAsync(Task.Delay(3000)))
@@ -259,9 +264,10 @@ public class Race
         {
             sender.SendPacket(new FinishPacket { LookForFinish = false });
         }
+        UnlockControls();
     }
 
-    private static async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Course course)
+    private async Task<bool> TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Course course)
     {
         Leader.Client!.SendPacket(new TeleportPacket
         {
@@ -277,25 +283,42 @@ public class Race
         // Check if both cars have been teleported to their starting locations.
         bool isLeaderTeleported = false;
         bool isFollowerTeleported = false;
+        const float thresholdSquared = 50f;
 
-        while (!isLeaderTeleported || !isFollowerTeleported)
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var token = cts.Token;
+
+        try
         {
-            Vector3 currentLeaderPos = Leader.Status.Position;
-            Vector3 currentFollowerPos = Follower.Status.Position;
+            while (!isLeaderTeleported || !isFollowerTeleported)
+            {
+                Vector3 currentLeaderPos = Leader.Status.Position;
+                Vector3 currentFollowerPos = Follower.Status.Position;
 
-            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
-            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
+                float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
+                float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
 
-            const float thresholdSquared = 50f;
+                if (leaderDistanceSquared < thresholdSquared)
+                {
+                    isLeaderTeleported = true;
+                }
+                if (followerDistanceSquared < thresholdSquared)
+                {
+                    isFollowerTeleported = true;
+                }
 
-            if (leaderDistanceSquared < thresholdSquared) {
-                isLeaderTeleported = true;
+                await Task.Delay(250, token);
             }
-            if (followerDistanceSquared < thresholdSquared) {
-                isFollowerTeleported = true;
-            }
 
-            await Task.Delay(250);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        finally
+        {
+            UnlockControls();
         }
     }
 
@@ -440,7 +463,7 @@ public class Race
         Follower.Client!.SendPacket(new FinishLinePacket { FinishPoint1 = course.FinishLine![0], FinishPoint2 = course.FinishLine[1] });
     }
 
-    private async Task<Course> SetUpRaceAsync()
+    private async Task<Course?> SetUpRaceAsync()
     {
         Course course = await GetCourseAsync();
         if (!_configuration.useTrackFinish)
@@ -449,8 +472,14 @@ public class Race
         }
 
         // First teleport players to their starting positions.
-        await TeleportToStartAsync(Leader, Follower, course);
-        
+        bool isTeleported = await TeleportToStartAsync(Leader, Follower, course);
+
+        if (!isTeleported)
+        {
+            SendMessage("Teleportation failed. Race setup timed out.");
+            return null;
+        }
+
         return course;
     }
     private async Task<bool> WaitWithForfeitAsync(Task task)
@@ -464,5 +493,11 @@ public class Race
 
         await task; // Propagate exceptions if needed
         return false;
+    }
+
+    private void UnlockControls()
+    {
+        Leader.Client!.SendPacket(new LockControlsPacket { LockControls = false });
+        Follower.Client!.SendPacket(new LockControlsPacket { LockControls = false });
     }
 }
