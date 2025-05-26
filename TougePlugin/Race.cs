@@ -374,7 +374,7 @@ public class Race
         float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
         float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
 
-        const float thresholdSquared = 40f;
+        const float thresholdSquared = 30f;
 
         // Check if either car has moved too far (jumpstart detection)
         if (leaderDistanceSquared > thresholdSquared && followerDistanceSquared > thresholdSquared)

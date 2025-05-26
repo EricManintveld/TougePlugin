@@ -2,6 +2,7 @@
 using TougePlugin.Packets;
 using Serilog;
 using TougePlugin.Models;
+using TougePlugin.TougeRulesets;
 
 namespace TougePlugin;
 
@@ -24,7 +25,7 @@ public class TougeSession
         Tie = 3,
     }
 
-    private enum SessionState
+    public enum SessionState
     {
         Off = 0,
         FirstTwo = 1,
@@ -39,10 +40,11 @@ public class TougeSession
     private readonly Touge _plugin;
     private readonly Race.Factory _raceFactory;
     private readonly TougeConfiguration _configuration;
+    private readonly ITougeRuleset _ruleset;
 
-    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged);
+    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset);
 
-    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration)
+    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset)
     {
         Challenger = challenger;
         Challenged = challenged;
@@ -50,6 +52,7 @@ public class TougeSession
         _plugin = plugin;
         _raceFactory = raceFactory;
         _configuration = configuration;
+        _ruleset = ruleset;
     }
 
     public Task StartAsync()
@@ -67,16 +70,7 @@ public class TougeSession
     {
         try
         {
-            // Do the first two races.
-            SendSessionState(SessionState.FirstTwo);
-            RaceResult result = await FirstTwoRaceAsync();
-
-            // If the result of the first two races is a tie, race until there is a winner.
-            if (result.Outcome == RaceOutcome.Tie)
-            {
-                SendSessionState(SessionState.SuddenDeath);
-                result = await RunSuddenDeathRacesAsync(result);
-            }
+            RaceResult result = await _ruleset.RunSessionAsync(this);
 
             if (result.Outcome != RaceOutcome.Disconnected)
             {
@@ -99,7 +93,7 @@ public class TougeSession
         }
     }
 
-    private async Task<RaceResult> FirstTwoRaceAsync()
+    public async Task<RaceResult> FirstTwoRaceAsync()
     {
         // Run race 1.
         Race race1 = _raceFactory(Challenger, Challenged);
@@ -161,7 +155,7 @@ public class TougeSession
         }
     }
 
-    private async Task<RaceResult> RunSuddenDeathRacesAsync(RaceResult firstTwoResult)
+    public async Task<RaceResult> RunSuddenDeathRacesAsync(RaceResult firstTwoResult)
     {
         RaceResult result = firstTwoResult;
         bool isChallengerLeading = true; // Challenger as leader at first.
@@ -315,7 +309,7 @@ public class TougeSession
         SendSessionState(hudState);
     }
 
-    private void SendSessionState(SessionState hudState)
+    public void SendSessionState(SessionState hudState)
     {
         Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], SessionState = (int)hudState });
         Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], SessionState = (int)hudState });

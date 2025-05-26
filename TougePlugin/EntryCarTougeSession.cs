@@ -1,7 +1,9 @@
 ﻿using System.Numerics;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
+using TougePlugin.Models;
 using TougePlugin.Packets;
+using TougePlugin.TougeRulesets;
 
 namespace TougePlugin;
 
@@ -13,15 +15,17 @@ public class EntryCarTougeSession
     private readonly Touge _plugin;
     private readonly EntryCar _entryCar;
     private readonly TougeSession.Factory _tougeSessionFactory;
+    private readonly Func<RulesetType, ITougeRuleset> _rulesetFactory;
 
     internal TougeSession? CurrentSession { get; set; }
 
-    public EntryCarTougeSession(EntryCar entryCar, EntryCarManager entryCarManager, Touge plugin, TougeSession.Factory tougeSessionFactory)
+    public EntryCarTougeSession(EntryCar entryCar, EntryCarManager entryCarManager, Touge plugin, TougeSession.Factory tougeSessionFactory, Func<RulesetType, ITougeRuleset> rulesetFactory)
     {
         _entryCar = entryCar;
         _entryCarManager = entryCarManager;
         _plugin = plugin;
         _tougeSessionFactory = tougeSessionFactory;
+        _rulesetFactory = rulesetFactory;
         _entryCar.ResetInvoked += OnResetInvoked;
     }
 
@@ -113,7 +117,8 @@ public class EntryCarTougeSession
                 else
                 {
                     // Create a new TougeSession instance and set this for both cars.
-                    currentSession = _tougeSessionFactory(_entryCar, car);
+                    var ruleset = _rulesetFactory(RulesetType.BattleStage);
+                    currentSession = _tougeSessionFactory(_entryCar, car, ruleset);
                     CurrentSession = currentSession;
                     _plugin.GetSession(car).CurrentSession = currentSession;
 
