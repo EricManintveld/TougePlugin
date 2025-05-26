@@ -4,6 +4,8 @@ local windowWidth = sim.windowWidth
 local windowHeight = sim.windowHeight
 
 local elo = -1
+local targetElo = -1
+local eloAnimSpeed = 5 -- points per second
 local hue = 180
 local eloNumPos = vec2(66, 26)
 
@@ -115,10 +117,9 @@ local sessionStateEvent = ac.OnlineEvent(
     end)
 
 -- elo helper funciton
-function SetElo(newElo)
-    elo = newElo
-    hue = (elo / 2000) * 360 - 80
-        if elo >= 1000 then
+function FindEloPos(newElo)
+    hue = (newElo / 2000) * 360 - 80
+        if newElo >= 1000 then
             eloNumPos = scaling.vec2(66, 26)
         else
             eloNumPos = scaling.vec2(76, 26)
@@ -130,7 +131,7 @@ local eloEvent = ac.OnlineEvent(
         ac.StructItem.key('AS_Elo'),
         elo = ac.StructItem.int32()
     }, function (sender, message)
-        SetElo(message.elo)
+        targetElo = message.elo
     end)
 
 local inviteEvent = ac.OnlineEvent(
@@ -161,8 +162,7 @@ local forfeitEvent = ac.OnlineEvent(
     {
         ac.StructItem.key('AS_Forfeit'),
         forfeit = ac.StructItem.boolean()
-    }, function (sender, message)
-        
+    }, function (sender, message) 
     end
 )
 
@@ -173,7 +173,8 @@ local initializationEvent = ac.OnlineEvent(
         racesCompleted = ac.StructItem.int32(),
         useTrackFinish = ac.StructItem.boolean(),
     }, function (sender, message)
-        SetElo(message.elo)
+        elo = message.elo - 100
+        targetElo = message.elo
         if message.racesCompleted >= 3 then
             isTutorialAutoHidden = true
         end
@@ -273,7 +274,7 @@ function DrawKey(key, pos, scale)
     end)
 end
 
-function script.drawUI()
+function script.drawUI(dt)
 
     -- Get updated window dimensions each frame
     windowWidth = sim.windowWidth
@@ -339,8 +340,12 @@ function script.drawUI()
             ui.pushDWriteFont(font)
             ui.dwriteDrawText("Elo", scaling.size(24), scaling.vec2(11, 31))
             ui.popDWriteFont()
+            
+            -- Draw elo number
             ui.pushDWriteFont(fontBold)
-            ui.dwriteDrawText(tostring(elo), scaling.size(34), eloNumPos)
+            local displayElo = math.floor(elo + 0.5)
+            FindEloPos(displayElo)
+            ui.dwriteDrawText(tostring(displayElo), scaling.size(34), eloNumPos)
             ui.popDWriteFont()
         end)
     end
@@ -546,4 +551,17 @@ function script.update(dt)
         hasIncomingNotification = false
         notificationActivatedAt = nil
     end
+    if elo ~= targetElo then
+        local direction = targetElo > elo and 1 or -1
+        local diff = math.abs(targetElo - elo)
+        local step = math.max(1, eloAnimSpeed * dt)
+
+        if diff <= step then
+            elo = targetElo
+        else
+            elo = elo + direction * step
+        end
+    end
+
+    elo = math.floor(elo + 0.5)
 end
