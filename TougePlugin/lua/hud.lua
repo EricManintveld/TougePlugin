@@ -3,6 +3,25 @@ local baseUrl = "http://" .. ac.getServerIP() .. ":" .. ac.getServerPortHTTP() .
 local windowWidth = sim.windowWidth
 local windowHeight = sim.windowHeight
 
+-- Scaling
+local baseRes = vec2(2560, 1440) -- Reference resolution
+local currentRes = vec2(sim.windowWidth, sim.windowHeight)
+local scaleFactor = math.min(currentRes.x / baseRes.x, currentRes.y / baseRes.y, 1)
+
+local scaling = {}
+
+function scaling.vec2(x, y)
+  return vec2(x, y) * scaleFactor
+end
+
+function scaling.size(size)
+  return size * scaleFactor
+end
+
+function scaling.get()
+  return scaleFactor
+end
+
 local elo = -1
 local targetElo = -1
 local eloAnimSpeed = 5 -- points per second
@@ -21,12 +40,15 @@ local lastLobbyStatusRequest = 0
 local lobbyCooldown = 1.0  -- Cooldown in seconds
 
 local standings = { 0, 0, 0 }  -- Default, no rounds have been completed.
+local standingWindowSize = scaling.vec2(387, 213)
 local currentHudState = 0
 local HudStates = {
     Off = 0,
     FirstTwo = 1,
     SuddenDeath = 2,
     Finished = 3,
+    CatAndMouse = 4,
+    NoUpdate = 5,
 }
 local RaceResults = {
     Tbd = 0,
@@ -66,25 +88,6 @@ local forfeitLockout = false
 
 local car = ac.getCar(0)
 
--- Scaling
-local baseRes = vec2(2560, 1440) -- Reference resolution
-local currentRes = vec2(sim.windowWidth, sim.windowHeight)
-local scaleFactor = math.min(currentRes.x / baseRes.x, currentRes.y / baseRes.y, 1)
-
-local scaling = {}
-
-function scaling.vec2(x, y)
-  return vec2(x, y) * scaleFactor
-end
-
-function scaling.size(size)
-  return size * scaleFactor
-end
-
-function scaling.get()
-  return scaleFactor
-end
-
 -- Load fonts
 local fontsURL = baseUrl .. "fonts.zip"
 web.loadRemoteAssets(fontsURL, function(err, folder)
@@ -107,13 +110,13 @@ local sessionStateEvent = ac.OnlineEvent(
         ac.StructItem.key('AS_SessionState'),
         result1 = ac.StructItem.int32(),
         result2 = ac.StructItem.int32(),
-        suddenDeathResult = ac.StructItem.int32(),
+        result3 = ac.StructItem.int32(),
         sessionState = ac.StructItem.int32()
     }, function (sender, message)
         standings[1] = message.result1
         standings[2] = message.result2
-        standings[3] = message.suddenDeathResult
-        currentHudState = message.sessionState
+        standings[3] = message.result3
+        if message.sessionState ~= HudStates.NoUpdate then currentHudState = message.sessionState end
     end)
 
 -- elo helper funciton
@@ -282,21 +285,25 @@ function script.drawUI(dt)
 
     -- Draw standings hud
     if currentHudState ~= HudStates.Off then
-        ui.transparentWindow("standingsWindow", scaling.vec2(50, windowHeight/2), scaling.vec2(387, 213), function()
+        
+        ui.transparentWindow("standingsWindow", scaling.vec2(50, windowHeight/2), standingWindowSize, function()
             ui.drawImage(standingsHudPath, vec2(0,0), scaling.vec2(387,213))
-            if currentHudState == HudStates.FirstTwo then
+            if currentHudState == HudStates.FirstTwo or currentHudState == HudStates.CatAndMouse then
                 ui.pushDWriteFont(fontSemiBold)
                 ui.dwriteDrawText("Standings", scaling.size(48), scaling.vec2(44, 37))
                 ui.popDWriteFont()
 
-                for i = 1, 2 do
+                local dots = 2
+                if currentHudState == HudStates.CatAndMouse then dots = 3 end
+
+                for i = 1, dots do
                     local result = standings[i]
                     -- Calculate position for each circle (horizontally centered)
                     local circleRadius = 25
                     local spacing = 40
-                    local totalWidth = (2 * (circleRadius * 2)) + spacing
-                    local startX = (200 - totalWidth) / 2 + 90
-                    local xPos = scaling.size(startX + (i - 1) * (circleRadius * 2 + spacing) + circleRadius)
+                    local totalWidth = (dots * 2 * circleRadius) + (dots - 1) * spacing
+                    local xStart = (standingWindowSize.x - totalWidth) / 2 + circleRadius
+                    local xPos = xStart + (2 * circleRadius + spacing) * (i - 1)
                     -- Set color based on result
                     local color
                     if result == RaceResults.Tbd then
@@ -318,7 +325,7 @@ function script.drawUI(dt)
                 ui.pushDWriteFont(font)
                 ui.dwriteDrawText("First player to win a round.", scaling.size(18), scaling.vec2(44, 120))
                 ui.popDWriteFont()
-            elseif currentHudState == HudStates.Finished then
+            elseif currentHudState == HudStates.Finished then -- This needs revisiting for different rulesets.
                 if standings[3] == RaceResults.Win then
                     ui.pushDWriteFont(fontBold)
                     ui.dwriteDrawText("You win!", scaling.size(32), scaling.vec2(44, 90))

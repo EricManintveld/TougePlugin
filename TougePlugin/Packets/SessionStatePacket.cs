@@ -9,8 +9,8 @@ public class SessionStatePacket : OnlineEvent<SessionStatePacket>
     public int Result1;
     [OnlineEventField(Name = "result2")]
     public int Result2;
-    [OnlineEventField(Name = "suddenDeathResult")]
-    public int SuddenDeathResult;
+    [OnlineEventField(Name = "result3")]
+    public int Result3;
     [OnlineEventField(Name = "sessionState")]
     public int SessionState;
 }

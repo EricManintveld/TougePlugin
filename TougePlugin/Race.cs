@@ -50,7 +50,7 @@ public class Race
         _configuration = configuration;
         _plugin = plugin;
 
-        if (_configuration.useTrackFinish)
+        if (_configuration.UseTrackFinish)
         {
             Leader.Client!.LapCompleted += OnClientLapCompleted;
             Follower.Client!.LapCompleted += OnClientLapCompleted;
@@ -127,7 +127,7 @@ public class Race
             byte signalStage = 0;
             while (signalStage < 3)
             {
-                if (!_configuration.isRollingStart)
+                if (!_configuration.IsRollingStart)
                 {
                     JumpstartResult jumpstart = AreInStartingPos(course);
                     if (jumpstart != JumpstartResult.None)
@@ -157,7 +157,7 @@ public class Race
                     _ = SendTimedMessageAsync("Set...");
                 else if (signalStage == 2)
                 {
-                    if (_configuration.isRollingStart)
+                    if (_configuration.IsRollingStart)
                     {
                         // Check if cars are close enough to each other to give a valid "Go!".
                         if (!IsValidRollingStartPos())
@@ -182,7 +182,7 @@ public class Race
 
     private async Task<RaceResult> RunRaceAsync()
     {
-        if (!_configuration.useTrackFinish)
+        if (!_configuration.UseTrackFinish)
         {
             NotifyLookForFinish(true);
         }
@@ -251,7 +251,7 @@ public class Race
         else if (LeaderSetLap && !FollowerSetLap)
         {
             // Make this time also configurable as outrun time.
-            int outrunTimer = (int)(_configuration.outrunTime * 1000f);
+            int outrunTimer = (int)(_configuration.OutrunTime * 1000f);
             _ = Task.Delay(outrunTimer).ContinueWith(_ => secondLapCompleted.TrySetResult(false));
         }
 
@@ -277,7 +277,7 @@ public class Race
             // Race has not started yet so set result for forfeit task.
             _forfeit.TrySetResult(sender);
         }
-        if (!_configuration.useTrackFinish)
+        if (!_configuration.UseTrackFinish)
         {
             sender.SendPacket(new FinishPacket { LookForFinish = false });
         }
@@ -483,7 +483,7 @@ public class Race
     private async Task<Course?> SetUpRaceAsync()
     {
         Course course = await GetCourseAsync();
-        if (!_configuration.useTrackFinish)
+        if (!_configuration.UseTrackFinish)
         {
             SendFinishLine(course);
         }

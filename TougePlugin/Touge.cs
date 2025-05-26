@@ -55,7 +55,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         ProvideScript("timing.lua");
 
         // Set up database connection
-        if (_configuration.isDbLocalMode)
+        if (_configuration.IsDbLocalMode)
         {
             // SQLite database.
             _connectionFactory = new SqliteConnectionFactory("plugins/TougePlugin/database.db");
@@ -63,7 +63,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         else
         {
             // PostgreSQL database.
-            _connectionFactory = new PostgresConnectionFactory(_configuration.postgresqlConnectionString!);
+            _connectionFactory = new PostgresConnectionFactory(_configuration.PostgresqlConnectionString!);
         }
 
         try
@@ -134,7 +134,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.useTrackFinish });
+        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)
@@ -291,7 +291,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
         }
 
-        Course[] courses = CourseSetupParser.Parse(startingPositionsFile, trackName, _configuration.useTrackFinish);
+        Course[] courses = CourseSetupParser.Parse(startingPositionsFile, trackName, _configuration.UseTrackFinish);
 
         if (courses.Length == 0)
         {

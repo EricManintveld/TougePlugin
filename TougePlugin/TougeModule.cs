@@ -17,6 +17,7 @@ public class TougeModule : AssettoServerModule<TougeConfiguration>
 
         // Rulesets
         builder.RegisterType<BattleStageRuleset>().As<ITougeRuleset>().Keyed<ITougeRuleset>(RulesetType.BattleStage);
+        builder.RegisterType<CatAndMouseRuleset>().As<ITougeRuleset>().Keyed<ITougeRuleset>(RulesetType.CatAndMouse);
 
         builder.Register<Func<RulesetType, ITougeRuleset>>(c =>
         {

@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using AssettoServer.Server.Configuration;
 using JetBrains.Annotations;
+using TougePlugin.Models;
 using YamlDotNet.Serialization;
 
 namespace TougePlugin;
@@ -25,17 +26,20 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
     public int MaxEloGainProvisional = 50;
 
     [YamlMember(Description = "Rolling start enabled.")]
-    public bool isRollingStart = false;
+    public bool IsRollingStart = false;
 
     [YamlMember(Description = "Outrun timer in seconds. Chase car has to finish within this amount of time after the lead car crosses the finish line.")]
-    public float outrunTime = 3.0f;
+    public float OutrunTime = 3.0f;
 
     [YamlMember(Description = "Local database mode enabled. If disabled please provide database connection information.")]
-    public bool isDbLocalMode = true;
+    public bool IsDbLocalMode = true;
 
     [YamlMember(Description = "Connection string to PostgreSQL database. Can be left empty if isDbLocalMode = true.")]
-    public string? postgresqlConnectionString;
+    public string? PostgresqlConnectionString;
 
     [YamlMember(Description = "Use the track's built in finish line as course end point.")]
-    public bool useTrackFinish = true;
+    public bool UseTrackFinish = true;
+
+    [YamlMember(Description = "The ruleset used for the touge sessions. Options: BattleStage or CatAndMouse.")]
+    public RulesetType RuleSetType = RulesetType.BattleStage;
 }

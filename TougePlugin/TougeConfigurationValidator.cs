@@ -27,14 +27,14 @@ public class TougeConfigurationValidator : AbstractValidator<TougeConfiguration>
             .GreaterThan(0)
             .WithMessage("MaxEloGainProvisional must be a positive integer");
 
-        RuleFor(cfg => cfg.outrunTime)
-            .InclusiveBetween(1, 60)
+        RuleFor(cfg => cfg.OutrunTime)
+            .InclusiveBetween(1f, 60f)
             .WithMessage("OutrunTime must be an integer between 1 and 60 seconds.");
 
-        RuleFor(cfg => cfg.postgresqlConnectionString)
+        RuleFor(cfg => cfg.PostgresqlConnectionString)
             .NotEmpty()
             .WithMessage("PostgreSQL connection string must be provided when isDbLocalMode is false.")
-            .When(cfg => !cfg.isDbLocalMode);
+            .When(cfg => !cfg.IsDbLocalMode);
     }
 
     private bool BeWithinValidRange(Dictionary<string, int> ratings)

@@ -1,4 +1,5 @@
 ﻿using AssettoServer.Server;
+using DotNext;
 using TougePlugin.Models;
 
 namespace TougePlugin.TougeRulesets;
@@ -23,24 +24,22 @@ public class BattleStageRuleset : ITougeRuleset
 
     private static async Task<RaceResult> FirstTwoRaceAsync(TougeSession session)
     {
+
         // Run race 1.
-        Race race1 = session._raceFactory(session.Challenger, session.Challenged);
-        RaceResult result1 = await session.StartRaceAsync(race1);
+        RaceResult result1 = await session.RunRaceAsync(session.Challenger, session.Challenged);
 
         // If both players are still connected. Run race 2.
         if (result1.Outcome != RaceOutcome.Disconnected)
         {
             session.ApplyRaceResultToStandings(result1, 0);
-
-            // Always start second race.
-            await Task.Delay(TougeSession.coolDownTime); // Small cooldown time inbetween races.
-            Race race2 = session._raceFactory(session.Challenged, session.Challenger);
-            RaceResult result2 = await session.StartRaceAsync(race2);
+            await Task.Delay(TougeSession.coolDownTime);
+            // If players are still connected, always start second race.
+            RaceResult result2 = await session.RunRaceAsync(session.Challenged, session.Challenger);
 
             if (result2.Outcome != RaceOutcome.Disconnected)
             {
                 session.ApplyRaceResultToStandings(result2, 1);
-                await Task.Delay(TougeSession.coolDownTime); // Small cooldown to keep scoreboard up.
+                await Task.Delay(TougeSession.coolDownTime);
 
                 // Both races are finished. Check what to return.
                 if (session.IsTie(result1, result2))

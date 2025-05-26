@@ -3,6 +3,6 @@
 public enum RulesetType
 {
     BattleStage,
-    BestOfThree
+    CatAndMouse,
     // Add others here later
 }

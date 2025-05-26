@@ -31,6 +31,8 @@ public class TougeSession
         FirstTwo = 1,
         SuddenDeath = 2,
         Finished = 3,
+        CatAndMouse = 4,
+        NoUpdate = 5,
     }
 
     public bool IsActive { get; private set; }
@@ -93,17 +95,25 @@ public class TougeSession
         }
     }
 
+    public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
+    {
+        Race race = _raceFactory(leader, follower);
+        RaceResult result = await StartRaceAsync(race);
+
+        return result;
+    }
+
     public void ApplyRaceResultToStandings(RaceResult result, int raceIndex)
     {
         if (result.Outcome == RaceOutcome.Win)
         {
-            UpdateStandings(result.ResultCar!, raceIndex, SessionState.FirstTwo);
+            UpdateStandings(result.ResultCar!, raceIndex);
             winCounter++;
         }
         else
         {
             // Tie case.
-            UpdateStandings(null, raceIndex, SessionState.FirstTwo);
+            UpdateStandings(null, raceIndex);
         }
     }
 
@@ -210,7 +220,7 @@ public class TougeSession
         return performance;
     }
 
-    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, SessionState hudState)
+    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, SessionState hudState = SessionState.NoUpdate)
     {
         // Update the standings arrays
         // Maybe just store the winner in a list? Not 2. And figure out by Client how the score should be sent.
@@ -237,7 +247,7 @@ public class TougeSession
 
     public void SendSessionState(SessionState hudState)
     {
-        Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], SessionState = (int)hudState });
-        Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], SessionState = (int)hudState });
+        Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], Result3 = challengerStandings[2], SessionState = (int)hudState });
+        Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], Result3 = challengedStandings[2], SessionState = (int)hudState });
     }
 }
