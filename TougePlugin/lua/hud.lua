@@ -82,6 +82,10 @@ local notificationMessage = ""
 local hasIncomingNotification = false
 local notificationActivatedAt = nil
 
+local countdownHudMessage = ""
+local isCountdownHudActive = false
+local countdownActivatedAt = nil
+
 local forfeitStartTime = nil
 local forfeitHoldDuration = 3.0 -- seconds
 local forfeitLockout = false
@@ -155,9 +159,15 @@ local notificationEvent = ac.OnlineEvent(
     {
         ac.StructItem.key('AS_Notification'),
         message = ac.StructItem.string(64),
+        isCountdown = ac.StructItem.boolean(),
     }, function (sender, message)
-        notificationMessage = message.message
-        hasIncomingNotification = true
+        if not message.isCountdown then
+            notificationMessage = message.message
+            hasIncomingNotification = true
+        else
+            countdownHudMessage = message.message
+            isCountdownHudActive = true
+        end
     end
 )
 
@@ -484,6 +494,22 @@ function script.drawUI(dt)
         end)
     end
 
+    -- Draw countdown
+    if isCountdownHudActive then
+        local fontSize = scaling.size(48)
+        local textSize = ui.measureDWriteText(countdownHudMessage, fontSize)
+        -- Compute top-left corner by subtracting half the text size
+        local textPos = vec2(
+            (windowWidth - textSize.x) / 2,
+            (windowHeight - textSize.y) / 2
+        )
+        ui.transparentWindow("countdownWindow", textPos, scaling.vec2(400,400), function ()
+            ui.pushDWriteFont(fontBold)
+            ui.dwriteDrawText(countdownHudMessage, fontSize, vec2(0,0))
+            ui.popDWriteFont()
+        end)
+    end
+
     -- Draw forfeit dialog
     if forfeitStartTime ~= nil and currentHudState ~= HudStates.Off then
         local windowPos = vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(222))
@@ -543,11 +569,15 @@ end
 
 function script.update(dt)
     InputCheck()
+    -- Maybe refactor this
     if hasActiveInvite and inviteActivatedAt == nil then
         inviteActivatedAt = os.clock()
     end
     if hasIncomingNotification and notificationActivatedAt == nil then
         notificationActivatedAt = os.clock()
+    end
+    if isCountdownHudActive and countdownActivatedAt == nil then
+        countdownActivatedAt = os.clock()
     end
 
     if inviteActivatedAt ~= nil and os.clock() - inviteActivatedAt >= 10 then
@@ -558,6 +588,11 @@ function script.update(dt)
         hasIncomingNotification = false
         notificationActivatedAt = nil
     end
+    if countdownActivatedAt ~= nil and os.clock() - countdownActivatedAt >= 5 then
+        isCountdownHudActive = false
+        countdownActivatedAt = nil
+    end
+
     if elo ~= targetElo then
         local direction = targetElo > elo and 1 or -1
         local diff = math.abs(targetElo - elo)

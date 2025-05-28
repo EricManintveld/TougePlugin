@@ -273,9 +273,9 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
     }
 
-    internal static void SendNotification(ACTcpClient? client, string message)
+    internal static void SendNotification(ACTcpClient? client, string message, bool isCountdown = false)
     {
-        client?.SendPacket(new NotificationPacket { Message = message });
+        client?.SendPacket(new NotificationPacket { Message = message, IsCountDown = isCountdown });
     }
 
     private Course[] GetCourses()
