@@ -3,6 +3,7 @@ using TougePlugin.Packets;
 using Serilog;
 using TougePlugin.Models;
 using TougePlugin.TougeRulesets;
+using TougePlugin.RaceTypes;
 
 namespace TougePlugin;
 
@@ -41,12 +42,13 @@ public class TougeSession
     private readonly EntryCarManager _entryCarManager;
     private readonly Touge _plugin;
     public readonly Race.Factory _raceFactory;
+    public readonly Func<RaceType, IRaceType> _raceTypeFactory;
     private readonly TougeConfiguration _configuration;
     private readonly ITougeRuleset _ruleset;
 
     public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset);
 
-    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset)
+    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory)
     {
         Challenger = challenger;
         Challenged = challenged;
@@ -55,6 +57,7 @@ public class TougeSession
         _raceFactory = raceFactory;
         _configuration = configuration;
         _ruleset = ruleset;
+        _raceTypeFactory = raceTypeFactory;
     }
 
     public Task StartAsync()
@@ -97,8 +100,11 @@ public class TougeSession
 
     public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
-        Race race = _raceFactory(leader, follower);
-        RaceResult result = await StartRaceAsync(race);
+        IRaceType raceType = _raceTypeFactory(RaceType.Course);
+        Race race = _raceFactory(leader, follower, raceType);
+        ActiveRace = race;
+        RaceResult result = await race.RaceAsync();
+        ActiveRace = null;
 
         return result;
     }
@@ -115,14 +121,6 @@ public class TougeSession
             // Tie case.
             UpdateStandings(null, raceIndex);
         }
-    }
-
-    public async Task<RaceResult> StartRaceAsync(Race race)
-    {
-        ActiveRace = race;
-        RaceResult result = await race.RaceAsync();
-        ActiveRace = null;
-        return result;
     }
 
     public bool IsTie(RaceResult r1, RaceResult r2)

@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
+using TougePlugin.RaceTypes;
 using Serilog;
 using TougePlugin.Models;
 using TougePlugin.Packets;
@@ -13,7 +14,7 @@ public class Race
     public EntryCar Follower { get; }
 
     private readonly EntryCarManager _entryCarManager;
-    private readonly TougeConfiguration _configuration;
+    public readonly TougeConfiguration _configuration;
     private readonly Touge _plugin;
 
     public enum JumpstartResult
@@ -25,20 +26,23 @@ public class Race
     }
 
     private bool LeaderSetLap = false;
-    private bool FollowerSetLap = false;
-    private readonly TaskCompletionSource<bool> secondLapCompleted = new();
-    private readonly TaskCompletionSource<ACTcpClient> _disconnected = new();
-    private readonly TaskCompletionSource<bool> _followerFirst = new();
+    public bool FollowerSetLap = false;
+    
     private readonly TaskCompletionSource<ACTcpClient> _forfeit = new();
+    public TaskCompletionSource<bool> SecondLapCompleted { get; } = new();
+    public TaskCompletionSource<ACTcpClient> Disconnected { get; } = new();
+    public TaskCompletionSource<bool> FollowerFirst { get; } = new();
 
-    private string LeaderName { get; }
-    private string FollowerName { get; }
+    public string LeaderName { get; }
+    public string FollowerName { get; }
 
     private bool IsGo = false;
 
-    public delegate Race Factory(EntryCar leader, EntryCar follower);
+    private readonly IRaceType _raceType;
 
-    public Race(EntryCar leader, EntryCar follower, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin)
+    public delegate Race Factory(EntryCar leader, EntryCar follower, IRaceType raceType);
+
+    public Race(EntryCar leader, EntryCar follower, IRaceType raceType, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin)
     {
         Leader = leader;
         Follower = follower;
@@ -49,12 +53,7 @@ public class Race
         _entryCarManager = entryCarManager;
         _configuration = configuration;
         _plugin = plugin;
-
-        if (_configuration.UseTrackFinish)
-        {
-            Leader.Client!.LapCompleted += OnClientLapCompleted;
-            Follower.Client!.LapCompleted += OnClientLapCompleted;
-        }
+        _raceType = raceType;
 
         Leader.Client!.Disconnecting += OnClientDisconnected;
         Follower.Client!.Disconnecting += OnClientDisconnected;
@@ -80,8 +79,7 @@ public class Race
                 return countdownResult;
             }
 
-            return await RunRaceAsync();
-            
+            return await _raceType.RunRaceAsync(this);
         }
 
         catch (Exception e)
@@ -180,47 +178,14 @@ public class Race
         return null;
     }
 
-    private async Task<RaceResult> RunRaceAsync()
-    {
-        if (!_configuration.UseTrackFinish)
-        {
-            NotifyLookForFinish(true);
-        }
-        Task completedRace = await Task.WhenAny(secondLapCompleted.Task, _disconnected.Task, _followerFirst.Task);
-
-        if (completedRace == _disconnected.Task)
-        {
-            SendMessage("Race cancelled due to disconnection or forfeit.");
-            return RaceResult.Disconnected(_disconnected.Task.Result.EntryCar);
-        }
-        else if (!FollowerSetLap)
-        {
-            SendMessage($"{FollowerName} did not finish in time. {LeaderName} wins!");
-            return RaceResult.Win(Leader);
-        }    
-        else if (completedRace == _followerFirst.Task)
-        {
-            SendMessage($"{FollowerName} overtook {LeaderName}. {FollowerName} wins!");
-            return RaceResult.Win(Follower);
-        }
-        else
-        {
-            SendMessage($"{LeaderName} did not pull away. It's a tie!");
-            return RaceResult.Tie();
-        }
-    }
-
     private void FinishRace()
     {
-        // Clean up
-        Leader.Client!.LapCompleted -= OnClientLapCompleted;
-        Follower.Client!.LapCompleted -= OnClientLapCompleted;
-        Leader.Client.Disconnecting -= OnClientDisconnected;
-        Follower.Client.Disconnecting -= OnClientDisconnected;
-        NotifyLookForFinish(false);
+        // General clean up
+        Leader.Client!.Disconnecting -= OnClientDisconnected;
+        Follower.Client!.Disconnecting -= OnClientDisconnected;
     }
 
-    private void SendMessage(string message)
+    public void SendMessage(string message)
     {
         Touge.SendNotification(Follower.Client, message);
         Touge.SendNotification(Leader.Client, message);
@@ -245,24 +210,24 @@ public class Race
 
         // If someone already set a lap, and this is the seconds person to set a lap
         if (LeaderSetLap && FollowerSetLap)
-            secondLapCompleted.TrySetResult(true);
+            SecondLapCompleted.TrySetResult(true);
 
         // If only the leader has set a lap
         else if (LeaderSetLap && !FollowerSetLap)
         {
             // Make this time also configurable as outrun time.
             int outrunTimer = (int)(_configuration.OutrunTime * 1000f);
-            _ = Task.Delay(outrunTimer).ContinueWith(_ => secondLapCompleted.TrySetResult(false));
+            _ = Task.Delay(outrunTimer).ContinueWith(_ => SecondLapCompleted.TrySetResult(false));
         }
 
         // Overtake, the follower finished earlier than leader.
         else if (FollowerSetLap && !LeaderSetLap)
-            _followerFirst.TrySetResult(true);
+            FollowerFirst.TrySetResult(true);
     }
 
     private void OnClientDisconnected(ACTcpClient sender, EventArgs args)
     {
-        _disconnected.TrySetResult(sender);
+        Disconnected.TrySetResult(sender);
     }
 
     internal void ForfeitPlayer(ACTcpClient sender)
@@ -270,7 +235,7 @@ public class Race
         if (IsGo)
         {
             // Race has started so simply set the result of the race to disconnected.
-            _disconnected.TrySetResult(sender);
+            Disconnected.TrySetResult(sender);
         }
         else
         {
@@ -458,18 +423,6 @@ public class Race
             }
         }
         return startingArea;
-    }
-
-    private void NotifyLookForFinish(bool lookForFinish)
-    {
-        Leader.Client!.SendPacket(new FinishPacket
-        {
-            LookForFinish = lookForFinish,
-        });
-        Follower.Client!.SendPacket(new FinishPacket
-        {
-            LookForFinish = lookForFinish,
-        });
     }
 
     private void SendFinishLine(Course course)

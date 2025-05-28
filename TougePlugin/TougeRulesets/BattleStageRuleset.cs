@@ -1,5 +1,4 @@
 ﻿using AssettoServer.Server;
-using DotNext;
 using TougePlugin.Models;
 
 namespace TougePlugin.TougeRulesets;
@@ -85,8 +84,7 @@ public class BattleStageRuleset : ITougeRuleset
             EntryCar leader = isChallengerLeading ? session.Challenger : session.Challenged;
             EntryCar follower = isChallengerLeading ? session.Challenged : session.Challenger;
 
-            Race race = session._raceFactory(leader, follower);
-            result = await session.StartRaceAsync(race);
+            result = await session.RunRaceAsync(leader, follower);
 
             isChallengerLeading = !isChallengerLeading;
             isFirstSuddenDeathRace = false;
