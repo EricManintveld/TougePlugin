@@ -100,7 +100,7 @@ public class TougeSession
 
     public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
-        IRaceType raceType = _raceTypeFactory(RaceType.Course);
+        IRaceType raceType = _raceTypeFactory(_configuration.RaceType);
         Race race = _raceFactory(leader, follower, raceType);
         ActiveRace = race;
         RaceResult result = await race.RaceAsync();

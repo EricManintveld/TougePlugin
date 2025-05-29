@@ -9,7 +9,7 @@ public class CourseRace : IRaceType
     {
         try
         {
-            if (race._configuration.UseTrackFinish)
+            if (race.Configuration.UseTrackFinish)
             {
                 race.Leader.Client!.LapCompleted += race.OnClientLapCompleted;
                 race.Follower.Client!.LapCompleted += race.OnClientLapCompleted;

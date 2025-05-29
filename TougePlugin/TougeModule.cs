@@ -24,7 +24,7 @@ public class TougeModule : AssettoServerModule<TougeConfiguration>
 
         // Racetypes
         builder.RegisterType<CourseRace>().As<IRaceType>().Keyed<IRaceType>(RaceType.Course);
-        //builder.RegisterType<ChallengeRaceType>().As<IRaceType>().Keyed<IRaceType>(RaceType.Outrun);
+        builder.RegisterType<OutrunRace>().As<IRaceType>().Keyed<IRaceType>(RaceType.Outrun);
 
         // Resolve RulesetType
         builder.Register<Func<RulesetType, ITougeRuleset>>(c =>

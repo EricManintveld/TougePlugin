@@ -42,4 +42,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "The ruleset used for the touge sessions. Options: BattleStage or CatAndMouse.")]
     public RulesetType RuleSetType = RulesetType.BattleStage;
+
+    [YamlMember(Description = "The type or race. Options: Course or Outrun.")]
+    public RaceType RaceType = RaceType.Course;
 }
