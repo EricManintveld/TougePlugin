@@ -1,5 +1,4 @@
-﻿using System.Numerics;
-using AssettoServer.Commands;
+﻿using AssettoServer.Commands;
 using AssettoServer.Commands.Attributes;
 using TougePlugin.Packets;
 using Qmmands;
@@ -38,5 +37,15 @@ public class TougeCommandModule : ACModuleBase
             // They both hold a reference to it.
             await currentSession.StartAsync();
         }
+    }
+
+    [Command("elo"), RequireConnectedPlayer]
+    public async Task ShowEloAsync()
+    {
+        // Get the players current elo
+        var (elo, _) = await _plugin.database.GetPlayerStatsAsync(Client!.Guid.ToString());
+        
+        // Send elo packet
+        Client!.SendPacket(new EloPacket { Elo = elo });
     }
 }

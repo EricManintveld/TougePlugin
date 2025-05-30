@@ -134,7 +134,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish });
+        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)

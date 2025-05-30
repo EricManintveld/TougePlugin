@@ -8,6 +8,8 @@ local baseRes = vec2(2560, 1440) -- Reference resolution
 local currentRes = vec2(sim.windowWidth, sim.windowHeight)
 local scaleFactor = math.min(currentRes.x / baseRes.x, currentRes.y / baseRes.y, 1)
 
+local discreteMode = false
+
 local scaling = {}
 
 function scaling.vec2(x, y)
@@ -27,6 +29,8 @@ local targetElo = -1
 local eloAnimSpeed = 5 -- points per second
 local hue = 180
 local eloNumPos = vec2(66, 26)
+local showElo = true
+local eloShownAt = nil
 
 local racesCompleted = 0
 
@@ -41,7 +45,7 @@ local lobbyCooldown = 1.0  -- Cooldown in seconds
 
 local standings = { 0, 0, 0 }  -- Default, no rounds have been completed.
 local standingWindowSize = scaling.vec2(387, 213)
-local currentHudState = 0
+local currentHudState = 1
 local HudStates = {
     Off = 0,
     FirstTwo = 1,
@@ -138,7 +142,11 @@ local eloEvent = ac.OnlineEvent(
         ac.StructItem.key('AS_Elo'),
         elo = ac.StructItem.int32()
     }, function (sender, message)
+        showElo = true
         targetElo = message.elo
+        if discreteMode then
+            eloShownAt = os.clock()
+        end
     end)
 
 local inviteEvent = ac.OnlineEvent(
@@ -188,8 +196,16 @@ local initializationEvent = ac.OnlineEvent(
         elo = ac.StructItem.int32(),
         racesCompleted = ac.StructItem.int32(),
         useTrackFinish = ac.StructItem.boolean(),
+        discreteMode = ac.StructItem.boolean(),
     }, function (sender, message)
         elo = message.elo - 100
+        
+        discreteMode = message.discreteMode
+        if discreteMode then
+            showElo = false
+            hasTutorialHidden = true
+        end
+
         targetElo = message.elo
         if message.racesCompleted >= 3 then
             isTutorialAutoHidden = true
@@ -299,7 +315,7 @@ function script.drawUI(dt)
     -- Draw standings hud
     if currentHudState ~= HudStates.Off then
         
-        ui.transparentWindow("standingsWindow", scaling.vec2(50, windowHeight/2), standingWindowSize, function()
+        ui.transparentWindow("standingsWindow", vec2(scaling.size(50), windowHeight/2), standingWindowSize, function()
             ui.drawImage(standingsHudPath, vec2(0,0), scaling.vec2(387,213))
             if currentHudState == HudStates.FirstTwo or currentHudState == HudStates.CatAndMouse then
                 ui.pushDWriteFont(fontSemiBold)
@@ -353,7 +369,7 @@ function script.drawUI(dt)
     end
 
     -- Draw elo hud element
-    if elo ~= -1 then
+    if elo ~= -1 and showElo then
         ui.transparentWindow("eloWindow", scaling.vec2(50, 50), scaling.vec2(196,82), function ()
             local r, g, b = HsvToRgb(hue, 0.7, 0.8)
             ui.drawImage(eloHudPath, scaling.vec2(0, 0), scaling.vec2(196, 82), rgbm(r,g,b,1))
@@ -572,6 +588,8 @@ end
 
 function script.update(dt)
     InputCheck()
+
+    -- This can be refactored with helper function.
     if inviteActivatedAt ~= nil and os.clock() - inviteActivatedAt >= 10 then
         hasActiveInvite = false
         inviteActivatedAt = nil
@@ -583,6 +601,10 @@ function script.update(dt)
     if countdownActivatedAt ~= nil and os.clock() - countdownActivatedAt >= 5 then
         isCountdownHudActive = false
         countdownActivatedAt = nil
+    end
+    if discreteMode and showElo and eloShownAt ~= nil and os.clock() - eloShownAt >= 15 then
+        eloShownAt = nil
+        showElo = false
     end
 
     if elo ~= targetElo then

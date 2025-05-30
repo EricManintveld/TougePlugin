@@ -13,4 +13,7 @@ public class InitializationPacket : OnlineEvent<InitializationPacket>
 
     [OnlineEventField(Name = "useTrackFinish")]
     public bool UseTrackFinish;
+
+    [OnlineEventField(Name = "discreteMode")]
+    public bool DiscreteMode = false;
 }

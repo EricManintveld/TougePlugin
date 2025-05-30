@@ -45,4 +45,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "The type or race. Options: Course or Outrun.")]
     public RaceType RaceType = RaceType.Course;
+
+    [YamlMember(Description = "Discrete mode for the hud. Only shows the hud when necassary, hidden otherwise.")]
+    public bool DiscreteMode = false;
 }
