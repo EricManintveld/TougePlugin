@@ -312,8 +312,8 @@ function script.drawUI(dt)
                 for i = 1, dots do
                     local result = standings[i]
                     -- Calculate position for each circle (horizontally centered)
-                    local circleRadius = 25
-                    local spacing = 40
+                    local circleRadius = scaling.size(25)
+                    local spacing = scaling.size(40)
                     local totalWidth = (dots * 2 * circleRadius) + (dots - 1) * spacing
                     local xStart = (standingWindowSize.x - totalWidth) / 2 + circleRadius
                     local xPos = xStart + (2 * circleRadius + spacing) * (i - 1)
@@ -329,7 +329,7 @@ function script.drawUI(dt)
                         color = rgbm(0.5, 0.5, 0.5, 0.7) -- Dark grey for tie
                     end
                     -- Draw circle with appropriate color
-                    ui.drawCircleFilled(vec2(xPos, scaling.size(145)), scaling.size(circleRadius), color, 32)
+                    ui.drawCircleFilled(vec2(xPos, scaling.size(145)), circleRadius, color, 32)
                 end
             elseif currentHudState == HudStates.SuddenDeath then
                 ui.pushDWriteFont(fontBold)
