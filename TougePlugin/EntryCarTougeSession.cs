@@ -135,9 +135,8 @@ public class EntryCarTougeSession
                             CurrentSession = null;
                             _plugin.GetSession(car).CurrentSession = null;
 
-                            var timeoutMessage = "Touge session request has timed out.";
-                            _entryCar.Client?.SendChatMessage(timeoutMessage);
-                            car.Client?.SendChatMessage(timeoutMessage);
+                            var timeoutMessage = "Invite was not accepted in time.";
+                            Touge.SendNotification(_entryCar.Client, timeoutMessage);
                         }
                     });
                 }

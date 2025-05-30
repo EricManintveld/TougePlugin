@@ -151,6 +151,7 @@ local inviteEvent = ac.OnlineEvent(
         if message.inviteSenderName ~= "" and message.inviteRecipientGuid ~= 1 then
             hasActiveInvite = true
             inviteSenderName = message.inviteSenderName
+            inviteActivatedAt = os.clock()
         end
     end
 )
@@ -164,9 +165,11 @@ local notificationEvent = ac.OnlineEvent(
         if not message.isCountdown then
             notificationMessage = message.message
             hasIncomingNotification = true
+            notificationActivatedAt = os.clock()
         else
             countdownHudMessage = message.message
             isCountdownHudActive = true
+            countdownActivatedAt = os.clock()
         end
     end
 )
@@ -569,17 +572,6 @@ end
 
 function script.update(dt)
     InputCheck()
-    -- Maybe refactor this
-    if hasActiveInvite and inviteActivatedAt == nil then
-        inviteActivatedAt = os.clock()
-    end
-    if hasIncomingNotification and notificationActivatedAt == nil then
-        notificationActivatedAt = os.clock()
-    end
-    if isCountdownHudActive and countdownActivatedAt == nil then
-        countdownActivatedAt = os.clock()
-    end
-
     if inviteActivatedAt ~= nil and os.clock() - inviteActivatedAt >= 10 then
         hasActiveInvite = false
         inviteActivatedAt = nil
