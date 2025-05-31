@@ -9,4 +9,6 @@ public class InvitePacket : OnlineEvent<InvitePacket>
     public string InviteSenderName;
     [OnlineEventField(Name = "inviteRecipientGuid")]
     public ulong InviteRecipientGuid = 0;
+    [OnlineEventField(Name = "inviteSenderElo")]
+    public int InviteSenderElo;
 }

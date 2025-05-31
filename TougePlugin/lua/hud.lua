@@ -31,10 +31,12 @@ local hue = 180
 local eloNumPos = vec2(66, 26)
 local showElo = true
 local eloShownAt = nil
+local eloHudSize = scaling.vec2(196, 82)
 
 local racesCompleted = 0
 
 local inviteSenderName = ""
+local inviteSenderElo = -1
 local hasActiveInvite = false
 local inviteActivatedAt = nil
 
@@ -137,6 +139,12 @@ function FindEloPos(newElo)
         end
     end
 
+function GetEloColor(eloValue)
+    local hueValue = (eloValue / 2000) * 360 - 80
+    local r, g, b = HsvToRgb(hueValue, 0.7, 0.8)
+    return rgbm(r, g, b, 1)
+end
+
 local eloEvent = ac.OnlineEvent(
     {
         ac.StructItem.key('AS_Elo'),
@@ -154,11 +162,13 @@ local inviteEvent = ac.OnlineEvent(
         ac.StructItem.key('AS_Invite'),
         inviteSenderName = ac.StructItem.string(),
         inviteRecipientGuid = ac.StructItem.uint64(),
+        inviteSenderElo = ac.StructItem.int32(),
     }, function (sender, message)
 
         if message.inviteSenderName ~= "" and message.inviteRecipientGuid ~= 1 then
             hasActiveInvite = true
             inviteSenderName = message.inviteSenderName
+            inviteSenderElo = message.inviteSenderElo
             inviteActivatedAt = os.clock()
         end
     end
@@ -186,7 +196,7 @@ local forfeitEvent = ac.OnlineEvent(
     {
         ac.StructItem.key('AS_Forfeit'),
         forfeit = ac.StructItem.boolean()
-    }, function (sender, message) 
+    }, function (sender, message)
     end
 )
 
@@ -218,18 +228,23 @@ local lobbyStatusEvent = ac.OnlineEvent({
     nearbyName1 = ac.StructItem.string(),
     nearbyId1 = ac.StructItem.uint64(),
     nearbyInRace1 = ac.StructItem.boolean(),
+    nearbyElo1 = ac.StructItem.int32(),
     nearbyName2 = ac.StructItem.string(),
     nearbyId2 = ac.StructItem.uint64(),
     nearbyInRace2 = ac.StructItem.boolean(),
+    nearbyElo2 = ac.StructItem.int32(),
     nearbyName3 = ac.StructItem.string(),
     nearbyId3 = ac.StructItem.uint64(),
     nearbyInRace3 = ac.StructItem.boolean(),
+    nearbyElo3 = ac.StructItem.int32(),
     nearbyName4 = ac.StructItem.string(),
     nearbyId4 = ac.StructItem.uint64(),
     nearbyInRace4 = ac.StructItem.boolean(),
+    nearbyElo4 = ac.StructItem.int32(),
     nearbyName5 = ac.StructItem.string(),
     nearbyId5 = ac.StructItem.uint64(),
     nearbyInRace5 = ac.StructItem.boolean(),
+    nearbyElo5 = ac.StructItem.int32(),
 
 }, function (sender, message)
 
@@ -237,27 +252,32 @@ local lobbyStatusEvent = ac.OnlineEvent({
     nearbyPlayers[1] = {
         name = message.nearbyName1,
         id = message.nearbyId1,
-        inRace = message.nearbyInRace1
+        inRace = message.nearbyInRace1,
+        elo = message.nearbyElo1,
       }
     nearbyPlayers[2] = {
         name = message.nearbyName2,
         id = message.nearbyId2,
-        inRace = message.nearbyInRace2
+        inRace = message.nearbyInRace2,
+        elo = message.nearbyElo2,
       }
     nearbyPlayers[3] = {
         name = message.nearbyName3,
         id = message.nearbyId3,
-        inRace = message.nearbyInRace3
+        inRace = message.nearbyInRace3,
+        elo = message.nearbyElo3,
       }
     nearbyPlayers[4] = {
         name = message.nearbyName4,
         id = message.nearbyId4,
-        inRace = message.nearbyInRace4
+        inRace = message.nearbyInRace4,
+        elo = message.nearbyElo4,
       }
     nearbyPlayers[5] = {
         name = message.nearbyName5,
         id = message.nearbyId5,
-        inRace = message.nearbyInRace5
+        inRace = message.nearbyInRace5,
+        elo = message.nearbyElo5,
       }
 end)
 
@@ -372,7 +392,7 @@ function script.drawUI(dt)
     if elo ~= -1 and showElo then
         ui.transparentWindow("eloWindow", scaling.vec2(50, 50), scaling.vec2(196,82), function ()
             local r, g, b = HsvToRgb(hue, 0.7, 0.8)
-            ui.drawImage(eloHudPath, scaling.vec2(0, 0), scaling.vec2(196, 82), rgbm(r,g,b,1))
+            ui.drawImage(eloHudPath, scaling.vec2(0, 0), eloHudSize, rgbm(r,g,b,1))
             ui.pushDWriteFont(font)
             ui.dwriteDrawText("Elo", scaling.size(24), scaling.vec2(11, 31))
             ui.popDWriteFont()
@@ -476,7 +496,23 @@ function script.drawUI(dt)
                     fontSize = fontSize - 8
                     textSize = ui.measureDWriteText(nearbyPlayers[index].name, scaling.size(fontSize))
                 end
-                ui.dwriteDrawTextClipped(nearbyPlayers[index].name, scaling.size(fontSize), cardPos + scaling.vec2(180, 0), cardSize, ui.Alignment.Start, ui.Alignment.Center, false, color)
+                ui.dwriteDrawTextClipped(nearbyPlayers[index].name, scaling.size(fontSize), cardPos + scaling.vec2(180, 40), cardSize, ui.Alignment.Start, ui.Alignment.Start, false, color)
+                ui.popDWriteFont()
+
+                -- Draw elo element
+                local eloPoint1 = vec2(cardPos.x + scaling.size(180), cardPos.y + scaling.size(95))
+                local eloPoint2 = vec2(eloPoint1.x + eloHudSize.x/2, eloPoint1.y + eloHudSize.y/2)
+                local playerElo = nearbyPlayers[index].elo
+
+                local eloColor = GetEloColor(playerElo)
+                ui.drawImage(eloHudPath, eloPoint1, eloPoint2, eloColor)
+                ui.pushDWriteFont(fontBold)
+
+                local eloTextXPos = eloPoint1.x + scaling.size(32)
+                if playerElo < 1000 then 
+                    eloTextXPos = eloTextXPos + scaling.size(6)
+                end
+                ui.dwriteDrawText(playerElo, scaling.size(16), vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
                 ui.popDWriteFont()
 
                 index = index + 1
@@ -488,9 +524,23 @@ function script.drawUI(dt)
     if hasActiveInvite == true then
         ui.transparentWindow("receivedInviteWindow", vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(222)), scaling.vec2(705,172), function ()
             ui.drawImage(playerCardPath, vec2(0,0), scaling.vec2(705,172))
+
+            -- Draw elo of invite sender.
+            local eloColor = GetEloColor(inviteSenderElo)
+            local eloPoint1 = scaling.vec2(182, 40)
+            local eloPoint2 = vec2(eloPoint1.x + eloHudSize.x/2, eloPoint1.y + eloHudSize.y/2)
+            ui.drawImage(eloHudPath, eloPoint1, eloPoint2, eloColor)
+            ui.pushDWriteFont(fontBold)
+
+            local eloTextXPos = eloPoint1.x + scaling.size(32)
+            if inviteSenderElo < 1000 then
+                eloTextXPos = eloTextXPos + scaling.size(6)
+            end
+            ui.dwriteDrawText(tostring(inviteSenderElo), scaling.size(16), vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
+
             ui.drawImage(mKeyPath, scaling.vec2(560,32), scaling.vec2(670,142))
             ui.pushDWriteFont(fontBold)
-            ui.dwriteDrawText(tostring(inviteSenderName), scaling.size(48), scaling.vec2(179,40))
+            ui.dwriteDrawText(tostring(inviteSenderName), scaling.size(48), scaling.vec2(295,35))
             ui.popDWriteFont()
             ui.pushDWriteFont(font)
             ui.dwriteDrawText("Challenged you!", scaling.size(36), scaling.vec2(180,95))

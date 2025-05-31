@@ -54,7 +54,7 @@ public class GenericDatabase(IDbConnectionFactory factory) : IDatabase
     public async Task<(int Rating, int RacesCompleted)> GetPlayerStatsAsync(string playerId)
     {
         await using var connection = factory.CreateConnection();
-        connection.Open();
+        await connection.OpenAsync();
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
@@ -64,7 +64,7 @@ public class GenericDatabase(IDbConnectionFactory factory) : IDatabase
         ";
         command.AddParameter("@playerId", playerId);
 
-        using var reader = command.ExecuteReader();
+        using var reader = await command.ExecuteReaderAsync();
 
         if (reader.Read())
         {

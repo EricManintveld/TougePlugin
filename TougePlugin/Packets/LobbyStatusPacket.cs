@@ -12,6 +12,8 @@ public class LobbyStatusPacket : OnlineEvent<LobbyStatusPacket>
     public ulong NearbyPlayerId1;
     [OnlineEventField(Name = "nearbyInRace1")]
     public bool NearbyPlayerInRace1;
+    [OnlineEventField(Name = "nearbyElo1")]
+    public int NearbyPlayerElo1;
 
     [OnlineEventField(Name = "nearbyName2", Size = 32)]
     public string NearbyPlayerName2;
@@ -19,6 +21,8 @@ public class LobbyStatusPacket : OnlineEvent<LobbyStatusPacket>
     public ulong NearbyPlayerId2;
     [OnlineEventField(Name = "nearbyInRace2")]
     public bool NearbyPlayerInRace2;
+    [OnlineEventField(Name = "nearbyElo2")]
+    public int NearbyPlayerElo2;
 
     [OnlineEventField(Name = "nearbyName3", Size = 32)]
     public string NearbyPlayerName3;
@@ -26,6 +30,8 @@ public class LobbyStatusPacket : OnlineEvent<LobbyStatusPacket>
     public ulong NearbyPlayerId3;
     [OnlineEventField(Name = "nearbyInRace3")]
     public bool NearbyPlayerInRace3;
+    [OnlineEventField(Name = "nearbyElo3")]
+    public int NearbyPlayerElo3;
 
     [OnlineEventField(Name = "nearbyName4", Size = 32)]
     public string NearbyPlayerName4;
@@ -33,6 +39,8 @@ public class LobbyStatusPacket : OnlineEvent<LobbyStatusPacket>
     public ulong NearbyPlayerId4;
     [OnlineEventField(Name = "nearbyInRace4")]
     public bool NearbyPlayerInRace4;
+    [OnlineEventField(Name = "nearbyElo4")]
+    public int NearbyPlayerElo4;
 
     [OnlineEventField(Name = "nearbyName5", Size = 32)]
     public string NearbyPlayerName5;
@@ -40,4 +48,6 @@ public class LobbyStatusPacket : OnlineEvent<LobbyStatusPacket>
     public ulong NearbyPlayerId5;
     [OnlineEventField(Name = "nearbyInRace5")]
     public bool NearbyPlayerInRace5;
+    [OnlineEventField(Name = "nearbyElo5")]
+    public int NearbyPlayerElo5;
 }

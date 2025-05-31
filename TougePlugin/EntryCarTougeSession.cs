@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Threading.Tasks;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using TougePlugin.Models;
@@ -87,7 +88,7 @@ public class EntryCarTougeSession
     // Updates CurrentSession for both cars if invite is succesfully sent.
     // If session isn't active after 10 seconds, it withdraws the invite.
     // In this case it sets the CurrentSession back to null for both cars.
-    internal void ChallengeCar(EntryCar car)
+    internal async Task ChallengeCar(EntryCar car)
     {
         void Reply(string message)
         {
@@ -126,7 +127,11 @@ public class EntryCarTougeSession
 
                     // Send messages to both players
                     _entryCar.Client?.SendChatMessage($"You have challenged {car.Client!.Name} to a touge session.");
-                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name! });
+
+                    // Get sender's elo
+                    var (senderElo, _) = await _plugin.database.GetPlayerStatsAsync(_entryCar.Client!.Guid!.ToString());
+
+                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo });
 
                     _ = Task.Delay(10000).ContinueWith(_ =>
                     {

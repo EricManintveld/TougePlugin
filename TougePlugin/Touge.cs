@@ -79,7 +79,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
 
         _cspClientMessageTypeManager.RegisterOnlineEvent<InitializationPacket>(OnInitializationPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<InvitePacket>(OnInvitePacket);
-        _cspClientMessageTypeManager.RegisterOnlineEvent<LobbyStatusPacket>(OnLobbyStatusPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<LobbyStatusPacket>(OnLobbyStatusPacketAsync);
         _cspClientMessageTypeManager.RegisterOnlineEvent<ForfeitPacket>(OnForfeitPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<FinishPacket>(OnFinishPacket);
 
@@ -155,23 +155,25 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             InviteCar(client, packet.InviteRecipientGuid);
     }
 
-    private void OnLobbyStatusPacket(ACTcpClient client, LobbyStatusPacket packet)
+    private async void OnLobbyStatusPacketAsync(ACTcpClient client, LobbyStatusPacket packet)
     {
         // Find if there is a player close to the client.
         List<EntryCar>? closestCars = GetSession(client!.EntryCar).FindClosestCars(5);
 
-        List<Dictionary<string, object>> playerStatsList = [];
-
-        foreach (EntryCar car in closestCars)
+        var tasks = closestCars.Select(async car =>
         {
-            Dictionary<string, object> playerStats = new Dictionary<string, object>
+            var (elo, _) = await database.GetPlayerStatsAsync(car.Client!.Guid!.ToString());
+
+            return new Dictionary<string, object>
             {
                 { "name", car.Client!.Name! },
                 { "id", car.Client!.Guid! },
                 { "inRace", IsInTougeSession(car) },
+                { "elo", elo }
             };
-            playerStatsList.Add(playerStats);
-        }
+        });
+
+        var playerStatsList = (await Task.WhenAll(tasks)).ToList();
 
         int nearbyPlayersCount = playerStatsList.Count;
         if (nearbyPlayersCount < 5)
@@ -183,7 +185,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                 {
                     { "name", "" },
                     { "id", (ulong)0 },
-                    { "inRace", false }
+                    { "inRace", false },
+                    { "elo", -1 }
                 });
             }
         }
@@ -195,18 +198,23 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             NearbyPlayerName1 = (string)playerStatsList[0]["name"],
             NearbyPlayerId1 = (ulong)playerStatsList[0]["id"],
             NearbyPlayerInRace1 = (bool)playerStatsList[0]["inRace"],
+            NearbyPlayerElo1 = (int)playerStatsList[0]["elo"],
             NearbyPlayerName2 = (string)playerStatsList[1]["name"],
             NearbyPlayerId2 = (ulong)playerStatsList[1]["id"],
             NearbyPlayerInRace2 = (bool)playerStatsList[1]["inRace"],
+            NearbyPlayerElo2 = (int)playerStatsList[1]["elo"],
             NearbyPlayerName3 = (string)playerStatsList[2]["name"],
             NearbyPlayerId3 = (ulong)playerStatsList[2]["id"],
             NearbyPlayerInRace3 = (bool)playerStatsList[2]["inRace"],
+            NearbyPlayerElo3 = (int)playerStatsList[2]["elo"],
             NearbyPlayerName4 = (string)playerStatsList[3]["name"],
             NearbyPlayerId4 = (ulong)playerStatsList[3]["id"],
             NearbyPlayerInRace4 = (bool)playerStatsList[3]["inRace"],
+            NearbyPlayerElo4 = (int)playerStatsList[3]["elo"],
             NearbyPlayerName5 = (string)playerStatsList[4]["name"],
             NearbyPlayerId5 = (ulong)playerStatsList[4]["id"],
             NearbyPlayerInRace5 = (bool)playerStatsList[4]["inRace"],
+            NearbyPlayerElo5 = (int)playerStatsList[4]["elo"],
         });
     }
 
