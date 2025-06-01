@@ -29,7 +29,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
     public bool IsRollingStart = false;
 
     [YamlMember(Description = "Outrun timer in seconds. Chase car has to finish within this amount of time after the lead car crosses the finish line.")]
-    public float OutrunTime = 3.0f;
+    public float OutrunTime = 1.5f;
 
     [YamlMember(Description = "Local database mode enabled. If disabled please provide database connection information.")]
     public bool IsDbLocalMode = true;
@@ -48,4 +48,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "Discrete mode for the hud. Only shows the hud when necassary, hidden otherwise.")]
     public bool DiscreteMode = false;
+
+    [YamlMember(Description = "Steam API key. Make sure NOT to share with anyone!")]
+    public string? SteamAPIKey;
 }

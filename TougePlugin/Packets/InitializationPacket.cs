@@ -16,4 +16,7 @@ public class InitializationPacket : OnlineEvent<InitializationPacket>
 
     [OnlineEventField(Name = "discreteMode")]
     public bool DiscreteMode = false;
+
+    [OnlineEventField(Name = "loadSteamAvatars")]
+    public bool loadSteamAvatars = false;
 }

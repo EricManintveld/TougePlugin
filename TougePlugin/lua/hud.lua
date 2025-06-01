@@ -10,6 +10,8 @@ local scaleFactor = math.min(currentRes.x / baseRes.x, currentRes.y / baseRes.y,
 
 local discreteMode = false
 
+local loadSteamAvatars = false
+
 local scaling = {}
 
 function scaling.vec2(x, y)
@@ -37,6 +39,7 @@ local racesCompleted = 0
 
 local inviteSenderName = ""
 local inviteSenderElo = -1
+local inviteSenderId = ""
 local hasActiveInvite = false
 local inviteActivatedAt = nil
 
@@ -83,6 +86,7 @@ local mKeyPath = baseUrl .. "MKey.png"
 local inviteMenuPath = baseUrl .. "InviteMenu.png"
 local tutorialPath = baseUrl .. "Tutorial.png"
 local keyPath = baseUrl .. "Key.png"
+local avatarsPath = baseUrl .. "avatars/"
 
 local notificationMessage = ""
 local hasIncomingNotification = false
@@ -163,12 +167,14 @@ local inviteEvent = ac.OnlineEvent(
         inviteSenderName = ac.StructItem.string(),
         inviteRecipientGuid = ac.StructItem.uint64(),
         inviteSenderElo = ac.StructItem.int32(),
+        inviteSenderId = ac.StructItem.string(),
     }, function (sender, message)
 
         if message.inviteSenderName ~= "" and message.inviteRecipientGuid ~= 1 then
             hasActiveInvite = true
             inviteSenderName = message.inviteSenderName
             inviteSenderElo = message.inviteSenderElo
+            inviteSenderId = message.inviteSenderId
             inviteActivatedAt = os.clock()
         end
     end
@@ -207,8 +213,9 @@ local initializationEvent = ac.OnlineEvent(
         racesCompleted = ac.StructItem.int32(),
         useTrackFinish = ac.StructItem.boolean(),
         discreteMode = ac.StructItem.boolean(),
+        loadSteamAvatars = ac.StructItem.boolean(),
     }, function (sender, message)
-        elo = message.elo - 100
+        loadSteamAvatars = message.loadSteamAvatars
         
         discreteMode = message.discreteMode
         if discreteMode then
@@ -216,7 +223,9 @@ local initializationEvent = ac.OnlineEvent(
             hasTutorialHidden = true
         end
 
+        elo = message.elo - 100
         targetElo = message.elo
+        
         if message.racesCompleted >= 3 then
             isTutorialAutoHidden = true
         end
@@ -324,6 +333,19 @@ function DrawKey(key, pos, scale)
         ui.dwriteDrawText(key, fontSize, centeredPos)
         ui.popDWriteFont()
     end)
+end
+
+function GetAvatarPath(steamId)
+    local id = tostring(steamId):gsub("%D+$", "")
+    return avatarsPath .. id .. ".jpg"
+end
+
+function DrawAvatar(player_id, cardPos)
+    if loadSteamAvatars then
+        local avatarPath = GetAvatarPath(player_id)
+        local avatarPoint1 = vec2(cardPos.x + scaling.size(41), cardPos.y + scaling.size(34))
+        ui.drawImage(avatarPath, avatarPoint1, avatarPoint1 + scaling.size(106))
+    end
 end
 
 function script.drawUI(dt)
@@ -470,7 +492,7 @@ function script.drawUI(dt)
                 local cardSize = scaling.vec2(737, 172)
                 local cardBottomRight = cardPos + cardSize
 
-                -- Draw player card background
+                -- Draw player card
                 local cardSize = scaling.vec2(737, yOffset + 172)
                 ui.drawImage(playerCardPath, cardPos, cardSize)
 
@@ -484,6 +506,9 @@ function script.drawUI(dt)
                     inviteEvent({inviteSenderName = "", inviteRecipientGuid = nearbyPlayers[index].id})
                     end
                 end
+
+                -- Draw player image
+                DrawAvatar(nearbyPlayers[index].id, cardPos)
 
                 -- Draw player name
                 ui.pushDWriteFont(fontBold)
@@ -524,6 +549,7 @@ function script.drawUI(dt)
     if hasActiveInvite == true then
         ui.transparentWindow("receivedInviteWindow", vec2(windowWidth-scaling.size(755), windowHeight-scaling.size(222)), scaling.vec2(705,172), function ()
             ui.drawImage(playerCardPath, vec2(0,0), scaling.vec2(705,172))
+            DrawAvatar(inviteSenderId, vec2(0,0))
 
             -- Draw elo of invite sender.
             local eloColor = GetEloColor(inviteSenderElo)

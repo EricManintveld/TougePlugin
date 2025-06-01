@@ -1,13 +1,14 @@
-﻿using System.Reflection;
+﻿using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
 using AssettoServer.Server.Plugin;
 using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
-using AssettoServer.Network.Tcp;
-using TougePlugin.Packets;
+using Serilog;
+using System.Reflection;
 using TougePlugin.Database;
 using TougePlugin.Models;
+using TougePlugin.Packets;
 
 namespace TougePlugin;
 
@@ -22,7 +23,11 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ACServerConfiguration _serverConfig;
 
+    private bool _loadSteamAvatars;
+    private const long MaxAvatarCacheSizeBytes = 4L * 1024 * 1024; // 50 MB
+
     private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.ini");
+    private static readonly string avatarFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "TougePlugin", "wwwroot", "avatars");
 
     public readonly IDatabase database;
     public readonly Course[] tougeCourses;
@@ -43,6 +48,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _cspClientMessageTypeManager = cspClientMessageTypeManager;
         _configuration = configuration;
         _serverConfig = serverConfiguration;
+
+        _loadSteamAvatars = _configuration.SteamAPIKey != null;
 
         if (!serverConfiguration.Extra.EnableClientMessages)
         {
@@ -84,6 +91,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _cspClientMessageTypeManager.RegisterOnlineEvent<FinishPacket>(OnFinishPacket);
 
         tougeCourses = GetCourses();
+
+        CheckAvatarsFolder();
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -117,6 +126,11 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Check if the player is registered in the database
         string playerId = client.Guid.ToString();
         database.CheckPlayerAsync(playerId);
+
+        if (_configuration.SteamAPIKey != null)
+        {
+            LoadAvatar(client);
+        }
     }
 
     private void ProvideScript(string scriptName)
@@ -134,7 +148,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode });
+        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode, loadSteamAvatars = _loadSteamAvatars });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)
@@ -243,7 +257,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         EntryCar? nearestCar = GetSession(client!.EntryCar).FindNearbyCar();
         if (nearestCar != null)
         {
-            GetSession(client!.EntryCar).ChallengeCar(nearestCar);
+            _ = GetSession(client!.EntryCar).ChallengeCar(nearestCar);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -272,7 +286,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         if (recipientCar != null)
         {
             // Invite the recipientCar
-            GetSession(client!.EntryCar).ChallengeCar(recipientCar);
+            _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -308,6 +322,92 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
 
         return courses;
+    }
+
+    private void LoadAvatar(ACTcpClient client)
+    {
+        // Check if its already downloaded
+        // Maybe also check if its really old or something.
+        if (!IsPictureCached(client))
+        {
+            EnsureCacheSpace();
+            // Download new picture from steam.
+            _ = SteamAPIClient.GetSteamAvatarAsync(_configuration.SteamAPIKey!, client.Guid.ToString());
+        }
+    }
+
+    private static bool IsPictureCached(ACTcpClient client)
+    {
+        string avatarPath = Path.Combine(avatarFolderPath, client.Guid.ToString() + ".jpg");
+        if (File.Exists(avatarPath))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private void CheckAvatarsFolder()
+    {
+        if (!Directory.Exists(avatarFolderPath))
+        {
+            Directory.CreateDirectory(avatarFolderPath);
+        }
+
+        try
+        {
+            
+            var root = Path.GetPathRoot(avatarFolderPath);
+            if (root != null)
+            {
+                DriveInfo drive = new DriveInfo(root);
+                if (drive.AvailableFreeSpace < MaxAvatarCacheSizeBytes)
+                {
+                    Log.Warning("Not enough disk space for avatars. Avatar feature will be disabled.");
+                    _loadSteamAvatars = false;
+                    return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warning($"Could not determine available disk space: {e.Message}");
+            Log.Warning("Avatar feature will be disabled as a precaution.");
+            _loadSteamAvatars = false;
+            return;
+        }
+
+        _loadSteamAvatars = true;
+    }
+
+    private static void EnsureCacheSpace()
+    {
+        DirectoryInfo dirInfo = new(avatarFolderPath);
+
+        if (!dirInfo.Exists)
+            return;
+
+        // Get all avatar files, sorted by LastAccessTime (oldest first)
+        var files = dirInfo.GetFiles("*.jpg")
+            .OrderBy(f => f.LastAccessTimeUtc)
+            .ToList();
+
+        long totalSize = files.Sum(f => f.Length);
+
+        while (totalSize > MaxAvatarCacheSizeBytes && files.Count > 0)
+        {
+            var fileToDelete = files[0];
+            try
+            {
+                totalSize -= fileToDelete.Length;
+                fileToDelete.Delete();
+                files.RemoveAt(0);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[AvatarCache] Failed to delete {fileToDelete.Name}: {ex.Message}");
+                files.RemoveAt(0); // Avoid infinite loop on error
+            }
+        }
     }
 }
 

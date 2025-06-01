@@ -131,7 +131,7 @@ public class EntryCarTougeSession
                     // Get sender's elo
                     var (senderElo, _) = await _plugin.database.GetPlayerStatsAsync(_entryCar.Client!.Guid!.ToString());
 
-                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo });
+                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo, InviteSenderId = _entryCar.Client!.Guid.ToString() });
 
                     _ = Task.Delay(10000).ContinueWith(_ =>
                     {
