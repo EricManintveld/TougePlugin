@@ -101,7 +101,8 @@ public class TougeSession
     public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
         IRaceType raceType = _raceTypeFactory(_configuration.RaceType);
-        Race race = _raceFactory(leader, follower, raceType);
+        Course course = _plugin.tougeCourses["Yaesu Route"]; // Grab something for testing
+        Race race = _raceFactory(leader, follower, raceType, course);
         ActiveRace = race;
         RaceResult result = await race.RaceAsync();
         ActiveRace = null;

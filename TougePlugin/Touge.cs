@@ -9,6 +9,9 @@ using System.Reflection;
 using TougePlugin.Database;
 using TougePlugin.Models;
 using TougePlugin.Packets;
+using TougePlugin.Serialization;
+using YamlDotNet.Core.Tokens;
+using YamlDotNet.Serialization;
 
 namespace TougePlugin;
 
@@ -26,11 +29,11 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     private bool _loadSteamAvatars;
     private const long MaxAvatarCacheSizeBytes = 4L * 1024 * 1024; // 50 MB
 
-    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.ini");
+    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.yml");
     private static readonly string avatarFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "TougePlugin", "wwwroot", "avatars");
 
     public readonly IDatabase database;
-    public readonly Course[] tougeCourses;
+    public readonly Dictionary<string, Course> tougeCourses;
 
     public Touge(
         TougeConfiguration configuration,
@@ -300,7 +303,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         client?.SendPacket(new NotificationPacket { Message = message, IsCountDown = isCountdown });
     }
 
-    private Course[] GetCourses()
+    private Dictionary<string, Course> GetCourses()
     {
         // Read starting positions from file
         string trackName = _serverConfig.FullTrackName;
@@ -309,16 +312,49 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         if (!File.Exists(startingPositionsFile))
         {
             // Create the file
-            File.WriteAllText(startingPositionsFile, "[full_track_name_1]\nleader_pos =\nleader_heading =\nchaser_pos =\nchaser_heading =");
+            string sampleYaml = """
+            Tracks:
+              your_track_name_here:
+                Courses:
+                  Sample Course Name:
+                    FinishLine:
+                      - [0.0, 0.0, 0.0]
+                      - [0.0, 0.0, 0.0]
+                    StartingSlots:
+                      - Leader:
+                          Position: [0.0, 0.0, 0.0]
+                          Heading: 0
+                        Follower:
+                          Position: [0.0, 0.0, 0.0]
+                          Heading: 0
+            """;
+            File.WriteAllText(startingPositionsFile, sampleYaml);
             throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
         }
 
-        Course[] courses = CourseSetupParser.Parse(startingPositionsFile, trackName, _configuration.UseTrackFinish);
+        var yaml = File.ReadAllText(startingPositionsFile);
+        var deserializer = new DeserializerBuilder()
+            .WithTypeConverter(new Vector3YamlConverter())
+            .WithTypeConverter(new Vector2YamlConverter())
+            .IgnoreUnmatchedProperties()
+            .Build();
+        
+        var tracksFile = deserializer.Deserialize<TracksFile>(yaml);
 
-        if (courses.Length == 0)
+        if (!tracksFile.Tracks.TryGetValue(trackName, out _))
+        {
+            throw new KeyNotFoundException($"Track '{trackName}' not found in 'cfg/touge_course_setup.yml'. Make sure to define course details for this track.");
+        }
+        Dictionary<string, Course> courses = tracksFile.Tracks[trackName].Courses;
+        foreach (var course in courses)
+        {
+            course.Value.Name = course.Key;
+        }
+
+        if (courses.Count == 0)
         {
             // There are no valid starting areas.
-            throw new Exception($"Did not find any valid starting areas in {startingPositionsFile}. Please define some for the track: {trackName}");
+            throw new Exception($"Did not find any valid courses in {startingPositionsFile}. Please define some for the track: {trackName}");
         }
 
         return courses;

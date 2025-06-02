@@ -40,10 +40,11 @@ public class Race
     private bool IsGo = false;
 
     private readonly IRaceType _raceType;
+    private readonly Course _course;
 
-    public delegate Race Factory(EntryCar leader, EntryCar follower, IRaceType raceType);
+    public delegate Race Factory(EntryCar leader, EntryCar follower, IRaceType raceType, Course course);
 
-    public Race(EntryCar leader, EntryCar follower, IRaceType raceType, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin, SessionManager sessionManager)
+    public Race(EntryCar leader, EntryCar follower, IRaceType raceType, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin, SessionManager sessionManager, Course course)
     {
         Leader = leader;
         Follower = follower;
@@ -59,14 +60,15 @@ public class Race
 
         Leader.Client!.Disconnecting += OnClientDisconnected;
         Follower.Client!.Disconnecting += OnClientDisconnected;
+        _course = course;
     }
 
     public async Task<RaceResult> RaceAsync()
     {
         try
         {
-            Course? course = await InitializeRaceAsync();
-            if (course == null)
+            SpawnPair? startSlots = await InitializeRaceAsync();
+            if (startSlots == null)
             {
                 return RaceResult.Disconnected(null);
             }
@@ -75,7 +77,7 @@ public class Race
             if (await WaitWithForfeitAsync(Task.Delay(3000)))
                 return RaceResult.Disconnected(Forfeit.Task.Result.EntryCar);
 
-            var countdownResult = await RunCountdownAsync(course);
+            var countdownResult = await RunCountdownAsync(startSlots);
             if (countdownResult != null)
             {
                 return countdownResult;
@@ -96,7 +98,7 @@ public class Race
         }
     }
 
-    private async Task<Course?> InitializeRaceAsync()
+    private async Task<SpawnPair?> InitializeRaceAsync()
     {
         var setupTask = Task.Run(() => SetUpRaceAsync());
         var forfeitTask = Forfeit.Task;
@@ -109,18 +111,18 @@ public class Race
             return null;
         }
 
-        Course? course = await setupTask;
+        SpawnPair? startSlots = await setupTask;
 
-        if (course == null)
+        if (startSlots == null)
         {
             SendMessage("Teleportation failed. Race setup aborted.");
             return null;
         }
 
-        return course;
+        return startSlots;
     }
 
-    private async Task<RaceResult?> RunCountdownAsync(Course course)
+    private async Task<RaceResult?> RunCountdownAsync(SpawnPair startSlots)
     {
         while (!IsGo)
         {
@@ -129,7 +131,7 @@ public class Race
             {
                 if (!Configuration.IsRollingStart)
                 {
-                    JumpstartResult jumpstart = AreInStartingPos(course);
+                    JumpstartResult jumpstart = AreInStartingPos(startSlots);
                     if (jumpstart != JumpstartResult.None)
                     {
                         if (jumpstart == JumpstartResult.Both)
@@ -198,8 +200,8 @@ public class Race
         SendMessage("Returning both players to their starting positions.");
         SendMessage("Race restarting soon...");
         await Task.Delay(3000);
-        Course course = await GetCourseAsync();
-        await TeleportToStartAsync(Leader, Follower, course);
+        SpawnPair startSlots = await GetStartSlotsAsync();
+        await TeleportToStartAsync(Leader, Follower, startSlots);
     }
 
     public void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs? args)
@@ -251,17 +253,17 @@ public class Race
         UnlockControls();
     }
 
-    private async Task<bool> TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Course course)
+    private async Task<bool> TeleportToStartAsync(EntryCar Leader, EntryCar Follower, SpawnPair startSlots)
     {
         Leader.Client!.SendPacket(new TeleportPacket
         {
-            Position = course.Leader.Position,
-            Heading = course.Leader.Heading,
+            Position = startSlots.Leader.Position,
+            Heading = startSlots.Leader.Heading,
         });
         Follower.Client!.SendPacket(new TeleportPacket
         {
-            Position = course.Follower.Position,
-            Heading = course.Follower.Heading,
+            Position = startSlots.Follower.Position,
+            Heading = startSlots.Follower.Heading,
         });
 
         // Check if both cars have been teleported to their starting locations.
@@ -279,8 +281,8 @@ public class Race
                 Vector3 currentLeaderPos = Leader.Status.Position;
                 Vector3 currentFollowerPos = Follower.Status.Position;
 
-                float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
-                float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
+                float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startSlots.Leader.Position);
+                float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startSlots.Follower.Position);
 
                 if (leaderDistanceSquared < thresholdSquared)
                 {
@@ -328,7 +330,7 @@ public class Race
     }
 
     // Check if the cars are still in their starting positions.
-    private JumpstartResult AreInStartingPos(Course course)
+    private JumpstartResult AreInStartingPos(SpawnPair startSlots)
     {
         // Get the current position of each car.
         Vector3 currentLeaderPos = Leader.Status.Position;
@@ -336,8 +338,8 @@ public class Race
 
         // Check if they are the same as the original starting postion.
         // Or at least check if the difference is not larger than a threshold.
-        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, course.Leader.Position);
-        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, course.Follower.Position);
+        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startSlots.Leader.Position);
+        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startSlots.Follower.Position);
 
         const float thresholdSquared = 20f;
 
@@ -368,15 +370,15 @@ public class Race
         return true;
     }
 
-    private Course? FindClearStartArea()
+    private SpawnPair? FindClearStartArea()
     {
         // Loop over the list of starting positions in the cfg file
         // If you find a valid/clear starting pos, return that.
-        foreach (var course in _plugin.tougeCourses)
+        foreach (var spawnPair in _course.StartingSlots)
         {
-            if (IsStartPosClear(course.Leader.Position) && IsStartPosClear(course.Follower.Position))
+            if (IsStartPosClear(spawnPair.Leader.Position) && IsStartPosClear(spawnPair.Follower.Position))
             {
-                return course;
+                return spawnPair;
             }
         }
         return null;
@@ -404,11 +406,11 @@ public class Race
         return true;
     }
 
-    private async Task<Course> GetCourseAsync()
+    private async Task<SpawnPair> GetStartSlotsAsync()
     {
         // Get the startingArea here.
         int waitTime = 0;
-        Course? startingArea = FindClearStartArea();
+        SpawnPair? startingArea = FindClearStartArea();
         while (startingArea == null)
         {
             // Wait for a short time before checking again to avoid blocking the thread
@@ -421,7 +423,7 @@ public class Race
             if (waitTime > 40)
             {
                 // Fallback after 10 seconds.
-                startingArea = _plugin.tougeCourses[0];
+                startingArea = _course.StartingSlots[0];
             }
         }
         return startingArea;
@@ -433,16 +435,16 @@ public class Race
         Follower.Client!.SendPacket(new FinishLinePacket { FinishPoint1 = course.FinishLine![0], FinishPoint2 = course.FinishLine[1] });
     }
 
-    private async Task<Course?> SetUpRaceAsync()
+    private async Task<SpawnPair?> SetUpRaceAsync()
     {
-        Course course = await GetCourseAsync();
+        SpawnPair startSlots = await GetStartSlotsAsync();
         if (!Configuration.UseTrackFinish)
         {
-            SendFinishLine(course);
+            SendFinishLine(_course);
         }
 
         // First teleport players to their starting positions.
-        bool isTeleported = await TeleportToStartAsync(Leader, Follower, course);
+        bool isTeleported = await TeleportToStartAsync(Leader, Follower, startSlots);
 
         if (!isTeleported)
         {
@@ -450,7 +452,7 @@ public class Race
             return null;
         }
 
-        return course;
+        return startSlots;
     }
     private async Task<bool> WaitWithForfeitAsync(Task task)
     {
