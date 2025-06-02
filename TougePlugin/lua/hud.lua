@@ -348,6 +348,19 @@ function DrawAvatar(player_id, cardPos)
     end
 end
 
+function DrawText(content, textFont, fontSize, pos)
+    ui.pushDWriteFont(textFont)
+    ui.dwriteDrawText(content, scaling.size(fontSize), pos)
+    ui.popDWriteFont()
+end
+
+local function checkTimeout(activatedAt, duration)
+    if activatedAt ~= nil and os.clock() - activatedAt >= duration then
+        return true
+    end
+    return false
+end
+
 function script.drawUI(dt)
 
     -- Get updated window dimensions each frame
@@ -356,13 +369,10 @@ function script.drawUI(dt)
 
     -- Draw standings hud
     if currentHudState ~= HudStates.Off then
-        
         ui.transparentWindow("standingsWindow", vec2(scaling.size(50), windowHeight/2), standingWindowSize, function()
             ui.drawImage(standingsHudPath, vec2(0,0), scaling.vec2(387,213))
             if currentHudState == HudStates.FirstTwo or currentHudState == HudStates.CatAndMouse then
-                ui.pushDWriteFont(fontSemiBold)
-                ui.dwriteDrawText("Standings", scaling.size(48), scaling.vec2(44, 37))
-                ui.popDWriteFont()
+                DrawText("Standings", fontSemiBold, 48, scaling.vec2(44, 37))
 
                 local dots = 2
                 if currentHudState == HudStates.CatAndMouse then dots = 3 end
@@ -390,21 +400,13 @@ function script.drawUI(dt)
                     ui.drawCircleFilled(vec2(xPos, scaling.size(145)), circleRadius, color, 32)
                 end
             elseif currentHudState == HudStates.SuddenDeath then
-                ui.pushDWriteFont(fontBold)
-                ui.dwriteDrawText("Sudden Death!", scaling.size(32), scaling.vec2(44, 80))
-                ui.popDWriteFont()
-                ui.pushDWriteFont(font)
-                ui.dwriteDrawText("First player to win a round.", scaling.size(18), scaling.vec2(44, 120))
-                ui.popDWriteFont()
+                DrawText("Sudden Death!", fontBold, 32, scaling.vec2(44, 80))
+                DrawText("First player to win a round.", font, 18, scaling.vec2(44, 120))
             elseif currentHudState == HudStates.Finished then -- This needs revisiting for different rulesets.
                 if standings[3] == RaceResults.Win then
-                    ui.pushDWriteFont(fontBold)
-                    ui.dwriteDrawText("You win!", scaling.size(32), scaling.vec2(44, 90))
-                    ui.popDWriteFont()
+                    DrawText("You win!", fontBold, 32, scaling.vec2(44, 90))
                 else
-                    ui.pushDWriteFont(fontBold)
-                    ui.dwriteDrawText("You lose.", scaling.size(32), scaling.vec2(44, 90))
-                    ui.popDWriteFont()
+                    DrawText("You lose.", fontBold, 32, scaling.vec2(44, 90))
                 end
             end
         end)
@@ -415,16 +417,12 @@ function script.drawUI(dt)
         ui.transparentWindow("eloWindow", scaling.vec2(50, 50), scaling.vec2(196,82), function ()
             local r, g, b = HsvToRgb(hue, 0.7, 0.8)
             ui.drawImage(eloHudPath, scaling.vec2(0, 0), eloHudSize, rgbm(r,g,b,1))
-            ui.pushDWriteFont(font)
-            ui.dwriteDrawText("Elo", scaling.size(24), scaling.vec2(11, 31))
-            ui.popDWriteFont()
+            DrawText("Elo", font, 24, scaling.vec2(11, 31))
             
             -- Draw elo number
-            ui.pushDWriteFont(fontBold)
             local displayElo = math.floor(elo + 0.5)
             FindEloPos(displayElo)
-            ui.dwriteDrawText(tostring(displayElo), scaling.size(34), eloNumPos)
-            ui.popDWriteFont()
+            DrawText(tostring(displayElo), fontBold, 34, eloNumPos)
         end)
     end
 
@@ -433,15 +431,11 @@ function script.drawUI(dt)
         if not isTutorialAutoHidden or (car ~= nil and car.speedKmh < 10) then
             ui.transparentWindow("tutorialWindow", vec2(scaling.size(50), windowHeight - scaling.size(465)), scaling.vec2(584, 415), function ()
                 ui.drawImage(tutorialPath, vec2(0,0), scaling.vec2(584, 415))
-                ui.pushDWriteFont(fontSemiBold)
-                ui.dwriteDrawText("How to play", scaling.size(24), scaling.vec2(32, 32))
-                ui.popDWriteFont()
-                ui.pushDWriteFont(font)
-                ui.dwriteDrawText("Chase car overtakes before finish: 1 point to the chase car.\nChase car stays close: draw, no points.\nLead car outruns: 1 point to the lead car.\n\nIf score is tied after the first two rounds: Sudden death.", scaling.size(14), scaling.vec2(32, 78))
-                ui.popDWriteFont()
-                ui.pushDWriteFont(fontSemiBold)
-                ui.dwriteDrawText("Controls", scaling.size(24), scaling.vec2(32, 177))
-                ui.popDWriteFont()
+                DrawText("How to play", fontSemiBold, 24, scaling.vec2(32, 32))
+            
+                local tutorialText = "Chase car overtakes before finish: 1 point to the chase car.\nChase car stays close: draw, no points.\nLead car outruns: 1 point to the lead car.\n\nIf score is tied after the first two rounds: Sudden death."
+                DrawText(tutorialText, font, 14, scaling.vec2(32, 78))
+                DrawText("Controls", fontSemiBold, 24, scaling.vec2(32, 177))
 
                 local scale = 0.8
                 local startX = scaling.size(112)
@@ -455,13 +449,9 @@ function script.drawUI(dt)
                     local keyPos = vec2(xOffset, baseY)
                     local textPos = vec2(XTextOffest - scaling.size(96), scaling.size(96))
 
-                    -- Draw the key
+                    -- Draw the key and description
                     DrawKey(binding.key, keyPos, scale)
-
-                    -- Draw the description
-                    ui.pushDWriteFont(fontSemiBold)
-                    ui.dwriteDrawText(binding.description, scaling.size(18), textPos)
-                    ui.popDWriteFont()
+                    DrawText(binding.description, fontSemiBold, 18, textPos)
                 end
             end)
         end
@@ -483,9 +473,7 @@ function script.drawUI(dt)
 
                 -- Draw the nearby section title once
                 if index == 1 then
-                    ui.pushDWriteFont(font)
-                    ui.dwriteDrawText("Nearby", scaling.size(48), scaling.vec2(40, 40))
-                    ui.popDWriteFont()
+                    DrawText("Nearby", font, 48, scaling.vec2(40, 40))
                 end
 
                 local cardPos = scaling.vec2(32, yOffset)
@@ -531,14 +519,13 @@ function script.drawUI(dt)
 
                 local eloColor = GetEloColor(playerElo)
                 ui.drawImage(eloHudPath, eloPoint1, eloPoint2, eloColor)
-                ui.pushDWriteFont(fontBold)
 
                 local eloTextXPos = eloPoint1.x + scaling.size(32)
                 if playerElo < 1000 then 
                     eloTextXPos = eloTextXPos + scaling.size(6)
                 end
-                ui.dwriteDrawText(playerElo, scaling.size(16), vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
-                ui.popDWriteFont()
+
+                DrawText(playerElo, fontBold, 16, vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
 
                 index = index + 1
             end
@@ -556,20 +543,18 @@ function script.drawUI(dt)
             local eloPoint1 = scaling.vec2(182, 40)
             local eloPoint2 = vec2(eloPoint1.x + eloHudSize.x/2, eloPoint1.y + eloHudSize.y/2)
             ui.drawImage(eloHudPath, eloPoint1, eloPoint2, eloColor)
-            ui.pushDWriteFont(fontBold)
 
             local eloTextXPos = eloPoint1.x + scaling.size(32)
             if inviteSenderElo < 1000 then
                 eloTextXPos = eloTextXPos + scaling.size(6)
             end
-            ui.dwriteDrawText(tostring(inviteSenderElo), scaling.size(16), vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
+
+            DrawText(tostring(inviteSenderElo), fontBold, 16, vec2(eloTextXPos, eloPoint1.y + scaling.size(12)))
 
             ui.drawImage(mKeyPath, scaling.vec2(560,32), scaling.vec2(670,142))
-            ui.pushDWriteFont(fontBold)
-            ui.dwriteDrawText(tostring(inviteSenderName), scaling.size(48), scaling.vec2(295,35))
-            ui.popDWriteFont()
-            ui.pushDWriteFont(font)
-            ui.dwriteDrawText("Challenged you!", scaling.size(36), scaling.vec2(180,95))
+
+            DrawText(tostring(inviteSenderName), fontBold, 48, scaling.vec2(295,35))
+            DrawText("Challenged you!", font, 36, scaling.vec2(180,95))
         end)
     end
 
@@ -599,9 +584,7 @@ function script.drawUI(dt)
             (windowHeight - textSize.y) / 2
         )
         ui.transparentWindow("countdownWindow", textPos, scaling.vec2(400,400), function ()
-            ui.pushDWriteFont(fontBold)
-            ui.dwriteDrawText(countdownHudMessage, fontSize, vec2(0,0))
-            ui.popDWriteFont()
+            DrawText(countdownHudMessage, fontBold, fontSize, vec2(0,0))
         end)
     end
 
@@ -614,9 +597,7 @@ function script.drawUI(dt)
         ui.transparentWindow("forfeitWindow", windowPos, scaling.vec2(705,172), function ()
             -- Draw the notification
             ui.drawImage(playerCardPath, vec2(0,0), scaling.vec2(705,172))
-            ui.pushDWriteFont(fontSemiBold)
-            ui.dwriteDrawText("Hold for 3 seconds to forfeit.", scaling.size(18), scaling.vec2(179,40))
-            ui.popDWriteFont()
+            DrawText("Hold for 3 seconds to forfeit.", fontSemiBold, 18, scaling.vec2(179,40))
         end)
     end
 end
@@ -665,16 +646,17 @@ end
 function script.update(dt)
     InputCheck()
 
-    -- This can be refactored with helper function.
-    if inviteActivatedAt ~= nil and os.clock() - inviteActivatedAt >= 10 then
+    if checkTimeout(inviteActivatedAt, 10) then
         hasActiveInvite = false
         inviteActivatedAt = nil
     end
-    if notificationActivatedAt ~= nil and os.clock() - notificationActivatedAt >= 10 then
+
+    if checkTimeout(notificationActivatedAt, 10) then
         hasIncomingNotification = false
         notificationActivatedAt = nil
     end
-    if countdownActivatedAt ~= nil and os.clock() - countdownActivatedAt >= 5 then
+
+    if checkTimeout(countdownActivatedAt, 5) then
         isCountdownHudActive = false
         countdownActivatedAt = nil
     end

@@ -36,6 +36,8 @@ local initializationEvent = ac.OnlineEvent(
         elo = ac.StructItem.int32(),
         racesCompleted = ac.StructItem.int32(),
         useTrackFinish = ac.StructItem.boolean(),
+        discreteMode = ac.StructItem.boolean(),
+        loadSteamAvatars = ac.StructItem.boolean(),
     }, function (sender, message)
         useTrackFinish = message.useTrackFinish
     end
