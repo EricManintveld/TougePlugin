@@ -28,8 +28,8 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
     [YamlMember(Description = "Rolling start enabled.")]
     public bool IsRollingStart = false;
 
-    [YamlMember(Description = "Outrun timer in seconds. Chase car has to finish within this amount of time after the lead car crosses the finish line.")]
-    public float OutrunTime = 1.5f;
+    [YamlMember(Description = "Outrun timer in seconds for course races. Chase car has to finish within this amount of time after the lead car crosses the finish line.")]
+    public float CourseOutrunTime = 1.5f;
 
     [YamlMember(Description = "Local database mode enabled. If disabled please provide database connection information.")]
     public bool IsDbLocalMode = true;
@@ -51,4 +51,10 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "Steam API key. Make sure NOT to share with anyone!")]
     public string? SteamAPIKey;
+
+    [YamlMember(Description = "Time limit for outrun races. If the leader is in the lead for this amount of time, they also win. Time is in seconds.")]
+    public int OutrunLeadTimeout = 120;
+
+    [YamlMember(Description = "Distance the leader has to outrun the chaser to win in outrun races. Distance in meters.")]
+    public int OutrunLeadDistance = 750;
 }

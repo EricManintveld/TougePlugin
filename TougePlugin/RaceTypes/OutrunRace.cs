@@ -47,7 +47,8 @@ public class OutrunRace : IRaceType
             }
             LastLeaderPosition = leaderPosition;
 
-            if (Vector3.DistanceSquared(OutrunLeader.Status.Position, OutrunChaser.Status.Position) > 562500)
+            int outRunDistanceSquared = race.Configuration.OutrunLeadDistance * race.Configuration.OutrunLeadDistance;
+            if (Vector3.DistanceSquared(OutrunLeader.Status.Position, OutrunChaser.Status.Position) > outRunDistanceSquared)
             {
                 // Leader has outrun the chaser.
                 Log.Debug("Leader has outrun the chaser.");
@@ -55,7 +56,7 @@ public class OutrunRace : IRaceType
             }
 
             // Make this time configurable
-            if (race.SessionManager.ServerTimeMilliseconds - LastOvertakeTime > 120000)
+            if (race.SessionManager.ServerTimeMilliseconds - LastOvertakeTime > race.Configuration.OutrunLeadTimeout * 1000)
             {
                 // The leader has been in the lead for two minutes.
                 Log.Debug("Leader has kept the lead for long enough to win.");

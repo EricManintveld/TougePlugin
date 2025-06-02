@@ -1,5 +1,4 @@
-﻿using System.Numerics;
-using FluentValidation;
+﻿using FluentValidation;
 using JetBrains.Annotations;
 
 namespace TougePlugin;
@@ -27,7 +26,7 @@ public class TougeConfigurationValidator : AbstractValidator<TougeConfiguration>
             .GreaterThan(0)
             .WithMessage("MaxEloGainProvisional must be a positive integer");
 
-        RuleFor(cfg => cfg.OutrunTime)
+        RuleFor(cfg => cfg.CourseOutrunTime)
             .InclusiveBetween(1f, 60f)
             .WithMessage("OutrunTime must be an integer between 1 and 60 seconds.");
 
@@ -35,6 +34,14 @@ public class TougeConfigurationValidator : AbstractValidator<TougeConfiguration>
             .NotEmpty()
             .WithMessage("PostgreSQL connection string must be provided when isDbLocalMode is false.")
             .When(cfg => !cfg.IsDbLocalMode);
+
+        RuleFor(cfg => cfg.OutrunLeadTimeout)
+            .GreaterThan(0)
+            .WithMessage("OutrunLeadTimeout must be a positive integer (in seconds).");
+
+        RuleFor(cfg => cfg.OutrunLeadDistance)
+            .GreaterThan(0)
+            .WithMessage("OutrunLeadDistance must be a positive integer (in meters).");
     }
 
     private bool BeWithinValidRange(Dictionary<string, int> ratings)

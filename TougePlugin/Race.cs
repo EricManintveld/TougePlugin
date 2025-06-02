@@ -218,7 +218,7 @@ public class Race
         else if (LeaderSetLap && !FollowerSetLap)
         {
             // Make this time also configurable as outrun time.
-            int outrunTimer = (int)(Configuration.OutrunTime * 1000f);
+            int outrunTimer = (int)(Configuration.CourseOutrunTime * 1000f);
             _ = Task.Delay(outrunTimer).ContinueWith(_ => SecondLapCompleted.TrySetResult(false));
         }
 
