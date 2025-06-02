@@ -468,6 +468,10 @@ function script.drawUI(dt)
 
             local mousePos = ui.mouseLocalPos()
 
+            if nearbyPlayers[1].name == "" then
+                DrawText("No other players online.", font, 48, scaling.vec2(40, 40))
+            end
+
             while index <= 5 and nearbyPlayers[index] and nearbyPlayers[index].name ~= "" do
                 local yOffset = baseY + (index - 1) * cardSpacingY  -- Calculate Y offset
 
