@@ -36,6 +36,7 @@ local initializationEvent = ac.OnlineEvent(
         useTrackFinish = ac.StructItem.boolean(),
         discreteMode = ac.StructItem.boolean(),
         loadSteamAvatars = ac.StructItem.boolean(),
+        courseNames = ac.StructItem.string(1024),
     }, function (sender, message)
         useTrackFinish = message.useTrackFinish
     end
@@ -53,7 +54,6 @@ local courseEvent = ac.OnlineEvent(
         end
         finishLine[1] = message.finishPoint1
         finishLine[2] = message.finishPoint2
-        print("Set new finish line!")
     end
 )
 

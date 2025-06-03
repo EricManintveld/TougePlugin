@@ -87,7 +87,7 @@ public class EntryCarTougeSession
     // Updates CurrentSession for both cars if invite is succesfully sent.
     // If session isn't active after 10 seconds, it withdraws the invite.
     // In this case it sets the CurrentSession back to null for both cars.
-    internal async Task ChallengeCar(EntryCar car)
+    internal async Task ChallengeCar(EntryCar car, string courseName)
     {
         void Reply(string message)
         {
@@ -120,7 +120,8 @@ public class EntryCarTougeSession
                 {
                     // Create a new TougeSession instance and set this for both cars.
                     var ruleset = _rulesetFactory(_configuration.RuleSetType);
-                    currentSession = _tougeSessionFactory(_entryCar, car, ruleset);
+                    Course course = _plugin.tougeCourses[courseName];
+                    currentSession = _tougeSessionFactory(_entryCar, car, ruleset, course);
                     CurrentSession = currentSession;
                     _plugin.GetSession(car).CurrentSession = currentSession;
 
@@ -130,7 +131,7 @@ public class EntryCarTougeSession
                     // Get sender's elo
                     var (senderElo, _) = await _plugin.database.GetPlayerStatsAsync(_entryCar.Client!.Guid!.ToString());
 
-                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo, InviteSenderId = _entryCar.Client!.Guid.ToString() });
+                    car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo, InviteSenderId = _entryCar.Client!.Guid.ToString(), CourseName = courseName });
 
                     _ = Task.Delay(10000).ContinueWith(_ =>
                     {

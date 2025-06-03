@@ -45,10 +45,11 @@ public class TougeSession
     public readonly Func<RaceType, IRaceType> _raceTypeFactory;
     private readonly TougeConfiguration _configuration;
     private readonly ITougeRuleset _ruleset;
+    private readonly Course _course;
 
-    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset);
+    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset, Course course);
 
-    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory)
+    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory, Course course)
     {
         Challenger = challenger;
         Challenged = challenged;
@@ -58,6 +59,7 @@ public class TougeSession
         _configuration = configuration;
         _ruleset = ruleset;
         _raceTypeFactory = raceTypeFactory;
+        _course = course;
     }
 
     public Task StartAsync()
@@ -101,8 +103,7 @@ public class TougeSession
     public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
         IRaceType raceType = _raceTypeFactory(_configuration.RaceType);
-        Course course = _plugin.tougeCourses["Yaesu Route"]; // Grab something for testing
-        Race race = _raceFactory(leader, follower, raceType, course);
+        Race race = _raceFactory(leader, follower, raceType, _course);
         ActiveRace = race;
         RaceResult result = await race.RaceAsync();
         ActiveRace = null;

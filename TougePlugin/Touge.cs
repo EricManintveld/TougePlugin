@@ -4,13 +4,13 @@ using AssettoServer.Server.Configuration;
 using AssettoServer.Server.Plugin;
 using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
+using Scriban;
 using Serilog;
 using System.Reflection;
 using TougePlugin.Database;
 using TougePlugin.Models;
 using TougePlugin.Packets;
 using TougePlugin.Serialization;
-using YamlDotNet.Core.Tokens;
 using YamlDotNet.Serialization;
 
 namespace TougePlugin;
@@ -158,7 +158,6 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             .ToArray();
 
         string courseNames = string.Join(delimiter, selectedCourseNames);
-        Log.Debug(courseNames);
 
         client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode, LoadSteamAvatars = _loadSteamAvatars, CourseNames = courseNames });
     }
@@ -178,7 +177,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
         else
             // Invite by GUID.
-            InviteCar(client, packet.InviteRecipientGuid);
+            InviteCar(client, packet.InviteRecipientGuid, packet.CourseName);
     }
 
     private async void OnLobbyStatusPacketAsync(ACTcpClient client, LobbyStatusPacket packet)
@@ -269,7 +268,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         EntryCar? nearestCar = GetSession(client!.EntryCar).FindNearbyCar();
         if (nearestCar != null)
         {
-            _ = GetSession(client!.EntryCar).ChallengeCar(nearestCar);
+            _ = GetSession(client!.EntryCar).ChallengeCar(nearestCar, tougeCourses.First().Value.Name!);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -278,7 +277,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
     }
 
-    public void InviteCar(ACTcpClient client, ulong recipientId)
+    public void InviteCar(ACTcpClient client, ulong recipientId, string courseName)
     {
         // First find EntryCar in EntryCarManager that matches guid.
         EntryCar? recipientCar = null;
@@ -298,7 +297,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         if (recipientCar != null)
         {
             // Invite the recipientCar
-            _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar);
+            _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar, courseName);
             SendNotification(client, "Invite sent!");
         }
         else

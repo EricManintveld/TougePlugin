@@ -20,6 +20,6 @@ public class InitializationPacket : OnlineEvent<InitializationPacket>
     [OnlineEventField(Name = "loadSteamAvatars")]
     public bool LoadSteamAvatars = false;
 
-    [OnlineEventField(Size = 1024)]
+    [OnlineEventField(Name = "courseNames", Size = 1024)]
     public string CourseNames;
 }

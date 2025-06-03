@@ -13,4 +13,6 @@ public class InvitePacket : OnlineEvent<InvitePacket>
     public int InviteSenderElo;
     [OnlineEventField(Name = "inviteSenderId", Size = 32)]
     public string InviteSenderId;
+    [OnlineEventField(Name = "courseName", Size = 32)]
+    public string CourseName;
 }

@@ -44,13 +44,16 @@ local hasActiveInvite = false
 local inviteActivatedAt = nil
 
 local hasInviteMenuOpen = false
+local hasCourseSelectOpen = false
 local nearbyPlayers = {}
+local selectedPlayerId = -1
 local lastLobbyStatusRequest = 0
 local lobbyCooldown = 1.0  -- Cooldown in seconds
+local courseNames = {}
 
 local standings = { 0, 0, 0 }  -- Default, no rounds have been completed.
 local standingWindowSize = scaling.vec2(387, 213)
-local currentHudState = 1
+local currentHudState = 0
 local HudStates = {
     Off = 0,
     FirstTwo = 1,
@@ -99,6 +102,8 @@ local countdownActivatedAt = nil
 local forfeitStartTime = nil
 local forfeitHoldDuration = 3.0 -- seconds
 local forfeitLockout = false
+
+local mouseClickHandled = false
 
 local car = ac.getCar(0)
 
@@ -168,6 +173,7 @@ local inviteEvent = ac.OnlineEvent(
         inviteRecipientGuid = ac.StructItem.uint64(),
         inviteSenderElo = ac.StructItem.int32(),
         inviteSenderId = ac.StructItem.string(),
+        courseName = ac.StructItem.string(),
     }, function (sender, message)
 
         if message.inviteSenderName ~= "" and message.inviteRecipientGuid ~= 1 then
@@ -175,6 +181,7 @@ local inviteEvent = ac.OnlineEvent(
             inviteSenderName = message.inviteSenderName
             inviteSenderElo = message.inviteSenderElo
             inviteSenderId = message.inviteSenderId
+            inviteSelectedCourse = message.courseName
             inviteActivatedAt = os.clock()
         end
     end
@@ -214,6 +221,7 @@ local initializationEvent = ac.OnlineEvent(
         useTrackFinish = ac.StructItem.boolean(),
         discreteMode = ac.StructItem.boolean(),
         loadSteamAvatars = ac.StructItem.boolean(),
+        courseNames = ac.StructItem.string(1024),
     }, function (sender, message)
         loadSteamAvatars = message.loadSteamAvatars
         
@@ -228,6 +236,10 @@ local initializationEvent = ac.OnlineEvent(
         
         if message.racesCompleted >= 3 then
             isTutorialAutoHidden = true
+        end
+
+        for courseName in string.gmatch(message.courseNames, "([^`]+)") do
+            table.insert(courseNames, courseName)
         end
     end
 )
@@ -256,7 +268,6 @@ local lobbyStatusEvent = ac.OnlineEvent({
     nearbyElo5 = ac.StructItem.int32(),
 
 }, function (sender, message)
-
     -- Update nearby players
     nearbyPlayers[1] = {
         name = message.nearbyName1,
@@ -468,8 +479,8 @@ function script.drawUI(dt)
 
             local mousePos = ui.mouseLocalPos()
 
-            if nearbyPlayers[1].name == "" then
-                DrawText("No other players online.", font, 48, scaling.vec2(40, 40))
+            if nearbyPlayers[1] ~= nil and nearbyPlayers[1].name == "" then
+                DrawText("No other players online", font, 48, scaling.vec2(40, 40))
             end
 
             while index <= 5 and nearbyPlayers[index] and nearbyPlayers[index].name ~= "" do
@@ -489,13 +500,19 @@ function script.drawUI(dt)
                 ui.drawImage(playerCardPath, cardPos, cardSize)
 
                 -- Check for mouse click inside card bounds
-                if ui.mouseClicked() then
+                if not mouseClickHandled and ui.mouseClicked() then
                     if mousePos.x >= cardPos.x and mousePos.x <= cardBottomRight.x and
                     mousePos.y >= cardPos.y and mousePos.y <= cardBottomRight.y then
-                    -- Player card was clicked
-                    hasInviteMenuOpen = false;
-                    -- Do something, like sending an invite
-                    inviteEvent({inviteSenderName = "", inviteRecipientGuid = nearbyPlayers[index].id})
+                        -- Player card was clicked
+                        hasInviteMenuOpen = false;
+                        if #courseNames > 1 then
+                            -- Show a menu to choose from the different coures.
+                            hasCourseSelectOpen = true
+                            selectedPlayerId = nearbyPlayers[index].id
+                            mouseClickHandled = true
+                        else
+                            inviteEvent({inviteSenderName = "", inviteRecipientGuid = nearbyPlayers[index].id})
+                        end
                     end
                 end
 
@@ -533,6 +550,57 @@ function script.drawUI(dt)
 
                 index = index + 1
             end
+        end)
+    end
+
+    -- Draw course select screen
+    if hasCourseSelectOpen then
+        ui.transparentWindow("courseSelectWindow", vec2(windowWidth - scaling.size(818), scaling.size(50)), scaling.vec2(768,1145), function ()
+            ui.drawImage(inviteMenuPath, vec2(0,0), scaling.vec2(768,1145))
+
+            local cardSpacingY = 180  -- Space between cards vertically
+            local baseY = 150         -- Starting Y position
+
+            local mousePos = ui.mouseLocalPos()
+
+            DrawText("Select a course", font, 48, scaling.vec2(40, 40))
+
+            for index, course in ipairs(courseNames) do
+                local yOffset = baseY + (index - 1) * cardSpacingY  -- Calculate Y offset
+
+                local cardPos = scaling.vec2(32, yOffset)
+                local cardSize = scaling.vec2(737, 172)
+                local cardBottomRight = cardPos + cardSize
+
+                -- Draw player card
+                local cardSize = scaling.vec2(737, yOffset + 172)
+                ui.drawImage(playerCardPath, cardPos, cardSize)
+
+                -- Check for mouse click inside card bounds
+                if not mouseClickHandled and ui.mouseClicked() then
+                    if mousePos.x >= cardPos.x and mousePos.x <= cardBottomRight.x and
+                    mousePos.y >= cardPos.y and mousePos.y <= cardBottomRight.y then
+                        -- Send invite with the selected course
+                        print(course)
+                        inviteEvent({inviteSenderName = "", inviteRecipientGuid = selectedPlayerId, courseName = course})
+                        hasCourseSelectOpen = false
+                        mouseClickHandled = true
+                    end
+                end
+
+                -- Draw course name text.
+                ui.pushDWriteFont(fontBold)
+                -- Find the right font size.
+                local fontSize = 48 -- Largest possible size
+                local textSize = ui.measureDWriteText(course, scaling.size(fontSize))
+                while textSize.x > scaling.size(550) do
+                    fontSize = fontSize - 8
+                    textSize = ui.measureDWriteText(course, scaling.size(fontSize))
+                end
+                ui.dwriteDrawTextClipped(course, scaling.size(fontSize), cardPos + scaling.vec2(180, 40), cardSize, ui.Alignment.Start, ui.Alignment.Start, false)
+                ui.popDWriteFont()
+            end
+
         end)
     end
 
@@ -607,19 +675,25 @@ function script.drawUI(dt)
 end
 
 function InputCheck()
+    mouseClickHandled = false
     if ui.keyboardButtonPressed(ui.KeyIndex.N, false) and not ui.anyItemFocused() and not ui.anyItemActive() then
         -- Send invite
         inviteEvent({inviteSenderName = "nearby", inviteRecipientGuid = 1})
     end
     if ui.keyboardButtonPressed(ui.KeyIndex.I, false) and not ui.anyItemFocused() and not ui.anyItemActive() then
-        hasInviteMenuOpen = not hasInviteMenuOpen
-        if hasInviteMenuOpen then
-            local now = os.clock()
-            if now - lastLobbyStatusRequest > lobbyCooldown then
-                lastLobbyStatusRequest = now
-                lobbyStatusEvent()
+        if hasCourseSelectOpen then 
+            hasCourseSelectOpen = false 
+        else
+            hasInviteMenuOpen = not hasInviteMenuOpen
+            if hasInviteMenuOpen then
+                local now = os.clock()
+                if now - lastLobbyStatusRequest > lobbyCooldown then
+                    lastLobbyStatusRequest = now
+                    lobbyStatusEvent()
+                end
             end
         end
+        
     end
     if ui.keyboardButtonPressed(ui.KeyIndex.M, false) and not ui.anyItemFocused() and not ui.anyItemActive() and hasActiveInvite then
         -- Accept invite
