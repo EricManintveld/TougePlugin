@@ -18,5 +18,8 @@ public class InitializationPacket : OnlineEvent<InitializationPacket>
     public bool DiscreteMode = false;
 
     [OnlineEventField(Name = "loadSteamAvatars")]
-    public bool loadSteamAvatars = false;
+    public bool LoadSteamAvatars = false;
+
+    [OnlineEventField(Size = 1024)]
+    public string CourseNames;
 }

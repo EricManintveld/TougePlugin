@@ -27,7 +27,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     private readonly ACServerConfiguration _serverConfig;
 
     private bool _loadSteamAvatars;
-    private const long MaxAvatarCacheSizeBytes = 4L * 1024 * 1024; // 50 MB
+    private const long MaxAvatarCacheSizeBytes = 4L * 1024 * 1024; // Make configurable
 
     private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.yml");
     private static readonly string avatarFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "TougePlugin", "wwwroot", "avatars");
@@ -151,7 +151,16 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode, loadSteamAvatars = _loadSteamAvatars });
+        char delimiter = '`';
+
+        var selectedCourseNames = tougeCourses
+            .Select(course => course.Value.Name ?? "")
+            .ToArray();
+
+        string courseNames = string.Join(delimiter, selectedCourseNames);
+        Log.Debug(courseNames);
+
+        client.SendPacket(new InitializationPacket { Elo = elo, RacesCompleted = racesCompleted, UseTrackFinish = _configuration.UseTrackFinish, DiscreteMode = _configuration.DiscreteMode, LoadSteamAvatars = _loadSteamAvatars, CourseNames = courseNames });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)

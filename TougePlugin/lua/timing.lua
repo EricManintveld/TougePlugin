@@ -21,11 +21,9 @@ local finishEvent = ac.OnlineEvent(
     }, function (sender, message)
         if message.lookForFinish and not useTrackFinish then
             isLookingForFinish = true
-            print("Looking for finish line!")
             print(finishLine)
         else
             isLookingForFinish = false
-            print("NOT looking for finish line!")
         end
     end
 )
