@@ -57,6 +57,9 @@
       <None Update="wwwroot\Standings.png">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <None Update="wwwroot\Toggle.png">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
       <None Update="wwwroot\Tutorial.png">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

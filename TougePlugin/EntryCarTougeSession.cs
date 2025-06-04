@@ -87,7 +87,7 @@ public class EntryCarTougeSession
     // Updates CurrentSession for both cars if invite is succesfully sent.
     // If session isn't active after 10 seconds, it withdraws the invite.
     // In this case it sets the CurrentSession back to null for both cars.
-    internal async Task ChallengeCar(EntryCar car, string courseName)
+    internal async Task ChallengeCar(EntryCar car, string courseName, bool isCourse = true)
     {
         void Reply(string message)
         {
@@ -121,7 +121,8 @@ public class EntryCarTougeSession
                     // Create a new TougeSession instance and set this for both cars.
                     var ruleset = _rulesetFactory(_configuration.RuleSetType);
                     Course course = _plugin.tougeCourses[courseName];
-                    currentSession = _tougeSessionFactory(_entryCar, car, ruleset, course);
+                    RaceType raceType = isCourse ? RaceType.Course : RaceType.Outrun;
+                    currentSession = _tougeSessionFactory(_entryCar, car, ruleset, course, raceType);
                     CurrentSession = currentSession;
                     _plugin.GetSession(car).CurrentSession = currentSession;
 

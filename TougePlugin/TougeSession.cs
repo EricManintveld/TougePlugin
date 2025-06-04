@@ -46,10 +46,11 @@ public class TougeSession
     private readonly TougeConfiguration _configuration;
     private readonly ITougeRuleset _ruleset;
     private readonly Course _course;
+    private readonly RaceType _raceType;
 
-    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset, Course course);
+    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset, Course course, RaceType raceType);
 
-    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory, Course course)
+    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory, Course course, RaceType raceType)
     {
         Challenger = challenger;
         Challenged = challenged;
@@ -60,6 +61,7 @@ public class TougeSession
         _ruleset = ruleset;
         _raceTypeFactory = raceTypeFactory;
         _course = course;
+        _raceType = raceType;
     }
 
     public Task StartAsync()
@@ -102,7 +104,7 @@ public class TougeSession
 
     public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
-        IRaceType raceType = _raceTypeFactory(_configuration.RaceType);
+        IRaceType raceType = _raceTypeFactory(_raceType);
         Race race = _raceFactory(leader, follower, raceType, _course);
         ActiveRace = race;
         RaceResult result = await race.RaceAsync();

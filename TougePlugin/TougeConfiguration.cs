@@ -59,4 +59,7 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
 
     [YamlMember(Description = "Determines if the plugin uses multiple different courses. Gives players the ability to select from the different courses you set up.")]
     public bool MultipleCourses = false;
+
+    [YamlMember(Description = "Whether players can challenge others to outrun races.")]
+    public bool AllowOutrun = false;
 }

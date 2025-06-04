@@ -50,6 +50,8 @@ local selectedPlayerId = -1
 local lastLobbyStatusRequest = 0
 local lobbyCooldown = 1.0  -- Cooldown in seconds
 local courseNames = {}
+local isOutrunAllowed = false
+local isToggleCourse = true
 
 local standings = { 0, 0, 0 }  -- Default, no rounds have been completed.
 local standingWindowSize = scaling.vec2(387, 213)
@@ -90,6 +92,10 @@ local inviteMenuPath = baseUrl .. "InviteMenu.png"
 local tutorialPath = baseUrl .. "Tutorial.png"
 local keyPath = baseUrl .. "Key.png"
 local avatarsPath = baseUrl .. "avatars/"
+
+local togglePath = baseUrl .. "Toggle.png"
+local toggleP1 = scaling.vec2(305, 31)
+local toggleP2 = scaling.vec2(736, 106)
 
 local notificationMessage = ""
 local hasIncomingNotification = false
@@ -174,6 +180,7 @@ local inviteEvent = ac.OnlineEvent(
         inviteSenderElo = ac.StructItem.int32(),
         inviteSenderId = ac.StructItem.string(),
         courseName = ac.StructItem.string(),
+        isCourse = ac.StructItem.boolean(),
     }, function (sender, message)
 
         if message.inviteSenderName ~= "" and message.inviteRecipientGuid ~= 1 then
@@ -181,7 +188,6 @@ local inviteEvent = ac.OnlineEvent(
             inviteSenderName = message.inviteSenderName
             inviteSenderElo = message.inviteSenderElo
             inviteSenderId = message.inviteSenderId
-            inviteSelectedCourse = message.courseName
             inviteActivatedAt = os.clock()
         end
     end
@@ -222,8 +228,10 @@ local initializationEvent = ac.OnlineEvent(
         discreteMode = ac.StructItem.boolean(),
         loadSteamAvatars = ac.StructItem.boolean(),
         courseNames = ac.StructItem.string(1024),
+        isOutrunAllowed = ac.StructItem.boolean(),
     }, function (sender, message)
         loadSteamAvatars = message.loadSteamAvatars
+        isOutrunAllowed = message.isOutrunAllowed
         
         discreteMode = message.discreteMode
         if discreteMode then
@@ -491,6 +499,31 @@ function script.drawUI(dt)
                     DrawText("Nearby", font, 48, scaling.vec2(40, 40))
                 end
 
+                -- Draw toggle
+                if isOutrunAllowed then
+                    
+                    --Flip depending on if the toggle is on course or not
+                    if isToggleCourse then
+                        ui.drawImage(togglePath, toggleP1, toggleP2)
+                    else
+                        ui.drawImage(togglePath, toggleP2, toggleP1)
+                    end
+                    
+                    if not mouseClickHandled and ui.mouseClicked() then
+                        if mousePos.x >= toggleP1.x and mousePos.x <= toggleP2.x and
+                        mousePos.y >= toggleP1.y and mousePos.y <= toggleP2.y then
+                            -- Toggle was clicked
+                            isToggleCourse = not isToggleCourse
+                            mouseClickHandled = true
+                        end
+                    end
+
+                    -- Draw toggle text
+                    DrawText("Course", fontSemiBold, scaling.size(36), scaling.vec2(334, 50))
+                    DrawText("Outrun", fontSemiBold, scaling.size(36), scaling.vec2(545, 50))
+
+                end
+
                 local cardPos = scaling.vec2(32, yOffset)
                 local cardSize = scaling.vec2(737, 172)
                 local cardBottomRight = cardPos + cardSize
@@ -511,7 +544,7 @@ function script.drawUI(dt)
                             selectedPlayerId = nearbyPlayers[index].id
                             mouseClickHandled = true
                         else
-                            inviteEvent({inviteSenderName = "", inviteRecipientGuid = nearbyPlayers[index].id})
+                            inviteEvent({inviteSenderName = "", inviteRecipientGuid = nearbyPlayers[index].id, isCourse = isToggleCourse})
                         end
                     end
                 end
@@ -582,7 +615,7 @@ function script.drawUI(dt)
                     mousePos.y >= cardPos.y and mousePos.y <= cardBottomRight.y then
                         -- Send invite with the selected course
                         print(course)
-                        inviteEvent({inviteSenderName = "", inviteRecipientGuid = selectedPlayerId, courseName = course})
+                        inviteEvent({inviteSenderName = "", inviteRecipientGuid = selectedPlayerId, courseName = course, isCourse = isToggleCourse})
                         hasCourseSelectOpen = false
                         mouseClickHandled = true
                     end

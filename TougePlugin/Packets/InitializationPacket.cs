@@ -22,4 +22,7 @@ public class InitializationPacket : OnlineEvent<InitializationPacket>
 
     [OnlineEventField(Name = "courseNames", Size = 1024)]
     public string CourseNames;
+
+    [OnlineEventField(Name = "isOutrunAllowed")]
+    public bool IsOutrunAllowed = false;
 }

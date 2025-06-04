@@ -37,6 +37,7 @@ local initializationEvent = ac.OnlineEvent(
         discreteMode = ac.StructItem.boolean(),
         loadSteamAvatars = ac.StructItem.boolean(),
         courseNames = ac.StructItem.string(1024),
+        isOutrunAllowed = ac.StructItem.boolean(),
     }, function (sender, message)
         useTrackFinish = message.useTrackFinish
     end
