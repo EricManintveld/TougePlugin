@@ -45,7 +45,7 @@ local inviteActivatedAt = nil
 
 local hasInviteMenuOpen = false
 local hasCourseSelectOpen = false
-local nearbyPlayers = {}
+local nearbyPlayers = { }
 local selectedPlayerId = -1
 local lastLobbyStatusRequest = 0
 local lobbyCooldown = 1.0  -- Cooldown in seconds
@@ -373,6 +373,18 @@ function DrawText(content, textFont, fontSize, pos)
     ui.popDWriteFont()
 end
 
+function FindFontSize(text, startSize, font, maxWidth)
+    ui.pushDWriteFont(font)
+    local fontSize = scaling.size(startSize)
+    local textSize = ui.measureDWriteText(text, fontSize)
+    while textSize.x > scaling.size(maxWidth) do
+        fontSize = fontSize - scaling.size(2)
+        textSize = ui.measureDWriteText(text, fontSize)
+    end
+    ui.popDWriteFont()
+    return fontSize
+end
+
 local function checkTimeout(activatedAt, duration)
     if activatedAt ~= nil and os.clock() - activatedAt >= duration then
         return true
@@ -556,13 +568,7 @@ function script.drawUI(dt)
                 ui.pushDWriteFont(fontBold)
                 local color = nearbyPlayers[index].inRace and rgbm(0.5, 0.5, 0.5, 1) or rgbm(1, 1, 1, 1)
                 
-                -- Find the right font size.
-                local fontSize = 48 -- Largest possible size
-                local textSize = ui.measureDWriteText(nearbyPlayers[index].name, scaling.size(fontSize))
-                while textSize.x > scaling.size(550) do
-                    fontSize = fontSize - 8
-                    textSize = ui.measureDWriteText(nearbyPlayers[index].name, scaling.size(fontSize))
-                end
+                local fontSize = FindFontSize(nearbyPlayers[index].name, 48, fontBold, 550)
                 ui.dwriteDrawTextClipped(nearbyPlayers[index].name, scaling.size(fontSize), cardPos + scaling.vec2(180, 40), cardSize, ui.Alignment.Start, ui.Alignment.Start, false, color)
                 ui.popDWriteFont()
 
@@ -623,6 +629,7 @@ function script.drawUI(dt)
 
                 -- Draw course name text.
                 ui.pushDWriteFont(fontBold)
+                local fontSize = FindFontSize(course, 48, fontBold, 550)
                 -- Find the right font size.
                 local fontSize = 48 -- Largest possible size
                 local textSize = ui.measureDWriteText(course, scaling.size(fontSize))
@@ -658,7 +665,8 @@ function script.drawUI(dt)
 
             ui.drawImage(mKeyPath, scaling.vec2(560,32), scaling.vec2(670,142))
 
-            DrawText(tostring(inviteSenderName), fontBold, 48, scaling.vec2(295,35))
+            local fontSize = FindFontSize(inviteSenderName, 48, fontBold, 270)
+            DrawText(tostring(inviteSenderName), fontBold, fontSize, scaling.vec2(295,35))
             DrawText("Challenged you!", font, 36, scaling.vec2(180,95))
         end)
     end
