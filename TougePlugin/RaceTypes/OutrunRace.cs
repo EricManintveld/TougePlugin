@@ -27,12 +27,12 @@ public class OutrunRace : IRaceType
             // Check for disconnects
             if (race.Leader.Client == null)
             {
-                Log.Debug("Leader disconnected.");
+                race.SendMessage("Lost connection to opponent.");
                 return RaceResult.Disconnected(race.Leader);
             }
             else if (race.Follower.Client == null)
             {
-                Log.Debug("Follower disconnect.");
+                race.SendMessage("Lost connection to opponent.");
                 return RaceResult.Disconnected(race.Follower);
             }
 
@@ -42,7 +42,7 @@ public class OutrunRace : IRaceType
             if (Vector3.DistanceSquared(LastLeaderPosition, leaderPosition) > 40000)
             {
                 // Leader teleported.
-                Log.Debug("Leader teleported, chaser wins.");
+                race.SendMessage($"{OutrunLeader.Client!.Name} teleported, {OutrunChaser.Client!.Name} wins.");
                 return RaceResult.Win(OutrunChaser);
             }
             LastLeaderPosition = leaderPosition;
@@ -51,15 +51,14 @@ public class OutrunRace : IRaceType
             if (Vector3.DistanceSquared(OutrunLeader.Status.Position, OutrunChaser.Status.Position) > outRunDistanceSquared)
             {
                 // Leader has outrun the chaser.
-                Log.Debug("Leader has outrun the chaser.");
+                race.SendMessage($"{OutrunLeader.Client!.Name} won the race by outrunning {OutrunChaser.Client!.Name}");
                 return RaceResult.Win(OutrunLeader);
             }
 
             // Make this time configurable
             if (race.SessionManager.ServerTimeMilliseconds - LastOvertakeTime > race.Configuration.OutrunLeadTimeout * 1000)
             {
-                // The leader has been in the lead for two minutes.
-                Log.Debug("Leader has kept the lead for long enough to win.");
+                race.SendMessage($"{OutrunLeader.Client!.Name} kept the lead long enough to take the win!");
                 return RaceResult.Win(OutrunLeader);
             }
 
