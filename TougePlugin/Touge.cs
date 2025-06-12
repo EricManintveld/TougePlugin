@@ -50,13 +50,9 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _cspClientMessageTypeManager = cspClientMessageTypeManager;
         _configuration = configuration;
         _serverConfig = serverConfiguration;
-
         _loadSteamAvatars = _configuration.SteamAPIKey != null;
 
-        if (!serverConfiguration.Extra.EnableClientMessages)
-        {
-            throw new ConfigurationException("Touge plugin requires ClientMessages to be enabled.");
-        }
+        CheckConfiguration();
 
         // Provide lua scripts
         ProvideScript("teleport.lua");
@@ -406,7 +402,6 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
 
         try
         {
-            
             var root = Path.GetPathRoot(avatarFolderPath);
             if (root != null)
             {
@@ -458,6 +453,18 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                 Log.Warning($"[AvatarCache] Failed to delete {fileToDelete.Name}: {ex.Message}");
                 files.RemoveAt(0); // Avoid infinite loop on error
             }
+        }
+    }
+
+    private void CheckConfiguration()
+    {
+        if (!_serverConfig.Extra.EnableClientMessages)
+        {
+            throw new ConfigurationException("Touge plugin requires ClientMessages to be enabled in 'extra_cfg.yml'.");
+        }
+        if (_serverConfig.Extra.MinimumCSPVersion < 1937)
+        {
+            throw new ConfigurationException("Touge plugin requires minumum CSP version 1937 or newer 'extra_cfg.yml'.");
         }
     }
 }
