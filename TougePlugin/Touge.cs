@@ -359,6 +359,10 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         Dictionary<string, Course> courses = tracksFile.Tracks[trackName].Courses;
         foreach (var course in courses)
         {
+            if (course.Key.Length > 32)
+            {
+                throw new ArgumentException($"Course name '{course.Key}' exceeds the maximum length of 32 characters.");
+            }
             course.Value.Name = course.Key;
         }
 
