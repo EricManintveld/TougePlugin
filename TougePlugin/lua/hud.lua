@@ -464,7 +464,7 @@ function script.drawUI(dt)
                 ui.drawImage(tutorialPath, vec2(0,0), scaling.vec2(584, 415))
                 DrawText("How to play", fontSemiBold, 24, scaling.vec2(32, 32))
             
-                local tutorialText = "Chase car overtakes before finish: 1 point to the chase car.\nChase car stays close: draw, no points.\nLead car outruns: 1 point to the lead car.\n\nIf score is tied after the first two rounds: Sudden death."
+                local tutorialText = "To start a race, either invite an oponent through the invite\nmenu or invite a nearby player.\n\nBeat your opponent to gain elo."
                 DrawText(tutorialText, font, 14, scaling.vec2(32, 78))
                 DrawText("Controls", fontSemiBold, 24, scaling.vec2(32, 177))
 
