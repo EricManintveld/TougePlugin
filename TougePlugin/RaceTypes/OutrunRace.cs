@@ -55,7 +55,6 @@ public class OutrunRace : IRaceType
                 return RaceResult.Win(OutrunLeader);
             }
 
-            // Make this time configurable
             if (race.SessionManager.ServerTimeMilliseconds - LastOvertakeTime > race.Configuration.OutrunLeadTimeout * 1000)
             {
                 race.SendMessage($"{OutrunLeader.Client!.Name} kept the lead long enough to take the win!");
