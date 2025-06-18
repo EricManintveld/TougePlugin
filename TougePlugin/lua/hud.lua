@@ -575,7 +575,9 @@ function script.drawUI(dt)
                 local color = nearbyPlayers[index].inRace and rgbm(0.5, 0.5, 0.5, 1) or rgbm(1, 1, 1, 1)
                 
                 local fontSize = FindFontSize(nearbyPlayers[index].name, 48, fontBold, 550)
-                ui.dwriteDrawTextClipped(nearbyPlayers[index].name, scaling.size(fontSize), cardPos + scaling.vec2(180, 40), cardSize, ui.Alignment.Start, ui.Alignment.Start, false, color)
+                local textMin = cardPos + scaling.vec2(180, 40)
+                local textMax = textMin + cardSize
+                ui.dwriteDrawTextClipped(nearbyPlayers[index].name, fontSize, textMin, textMax, ui.Alignment.Start, ui.Alignment.Start, false, color)
                 ui.popDWriteFont()
 
                 -- Draw elo element

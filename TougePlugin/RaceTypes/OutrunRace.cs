@@ -1,7 +1,6 @@
 ﻿using System.Numerics;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
-using Serilog;
 using TougePlugin.Models;
 
 namespace TougePlugin.RaceTypes;
