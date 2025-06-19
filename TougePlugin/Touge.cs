@@ -154,6 +154,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
 
         string courseNames = string.Join(delimiter, selectedCourseNames);
 
+        bool showToggle = _configuration.EnableOutrunRace && _configuration.EnableCourseRace;
+
         client.SendPacket(new InitializationPacket { 
             Elo = elo, 
             RacesCompleted = racesCompleted, 
@@ -161,7 +163,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             DiscreteMode = _configuration.DiscreteMode, 
             LoadSteamAvatars = _loadSteamAvatars, 
             CourseNames = courseNames,
-            IsOutrunAllowed = _configuration.AllowOutrun,
+            ShowRaceTypeToggle = showToggle,
         });
     }
 
@@ -271,7 +273,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         EntryCar? nearestCar = GetSession(client!.EntryCar).FindNearbyCar();
         if (nearestCar != null)
         {
-            _ = GetSession(client!.EntryCar).ChallengeCar(nearestCar, tougeCourses.First().Value.Name!);
+            InviteCar(client, nearestCar.Client!.Guid, tougeCourses.First().Value.Name!, true);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -299,6 +301,19 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Either found the recipient or still null.
         if (recipientCar != null)
         {
+            // Check what race type it is. But only if there is only one race type available.
+            // Otherwise its determined by the player and passed with isCourse.
+            if (!(_configuration.EnableCourseRace && _configuration.EnableOutrunRace))
+            {
+                if (_configuration.EnableOutrunRace) {
+                    isCourse = false;
+                }
+                else
+                {
+                    isCourse = true;
+                }
+            }
+
             // Invite the recipientCar
             _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar, courseName, isCourse);
             SendNotification(client, "Invite sent!");

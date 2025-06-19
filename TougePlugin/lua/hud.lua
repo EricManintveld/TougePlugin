@@ -51,7 +51,7 @@ local lastLobbyStatusRequest = 0
 local lobbyCooldown = 1.0  -- Cooldown in seconds
 local courseNames = {}
 local courseListLength = 768
-local isOutrunAllowed = false
+local showRaceTypeToggle = false
 local isToggleCourse = true
 local cardSpacingY = 180
 local cardSize = scaling.vec2(737, 172)
@@ -231,11 +231,11 @@ local initializationEvent = ac.OnlineEvent(
         discreteMode = ac.StructItem.boolean(),
         loadSteamAvatars = ac.StructItem.boolean(),
         courseNames = ac.StructItem.string(1024),
-        isOutrunAllowed = ac.StructItem.boolean(),
+        showRaceTypeToggle = ac.StructItem.boolean(),
     }, function (sender, message)
         loadSteamAvatars = message.loadSteamAvatars
-        isOutrunAllowed = message.isOutrunAllowed
-        
+        showRaceTypeToggle = message.showRaceTypeToggle
+
         discreteMode = message.discreteMode
         if discreteMode then
             showElo = false
@@ -244,7 +244,7 @@ local initializationEvent = ac.OnlineEvent(
 
         elo = message.elo - 100
         targetElo = message.elo
-        
+
         if message.racesCompleted >= 3 then
             isTutorialAutoHidden = true
         end
@@ -520,7 +520,7 @@ function script.drawUI(dt)
                 end
 
                 -- Draw toggle
-                if isOutrunAllowed then
+                if showRaceTypeToggle then
                     
                     --Flip depending on if the toggle is on course or not
                     if isToggleCourse then

@@ -57,9 +57,9 @@ public class TougeConfiguration : IValidateConfiguration<TougeConfigurationValid
     [YamlMember(Description = "Distance the leader has to outrun the chaser to win in outrun races. Distance in meters.")]
     public int OutrunLeadDistance = 750;
 
-    [YamlMember(Description = "Determines if the plugin uses multiple different courses. Gives players the ability to select from the different courses you set up.")]
-    public bool MultipleCourses = false;
-
     [YamlMember(Description = "Whether players can challenge others to outrun races.")]
-    public bool AllowOutrun = false;
+    public bool EnableOutrunRace = false;
+
+    [YamlMember(Description = "Whether or not courser race (races with a defined finish line) are enabled.")]
+    public bool EnableCourseRace = true;
 }

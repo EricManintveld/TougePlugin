@@ -42,6 +42,10 @@ public class TougeConfigurationValidator : AbstractValidator<TougeConfiguration>
         RuleFor(cfg => cfg.OutrunLeadDistance)
             .GreaterThan(0)
             .WithMessage("OutrunLeadDistance must be a positive integer (in meters).");
+
+        RuleFor(cfg => cfg.EnableCourseRace)
+            .Must((cfg, _) => cfg.EnableCourseRace || cfg.EnableOutrunRace)
+            .WithMessage("At least one of EnableCourseRace or EnableOutrunRace must be true.");
     }
 
     private bool BeWithinValidRange(Dictionary<string, int> ratings)
