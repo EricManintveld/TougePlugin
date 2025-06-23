@@ -545,10 +545,10 @@ function script.drawUI(dt)
                 end
 
                 local cardPos = scaling.vec2(32, yOffset)
-                local cardBottomRight = cardPos + cardSize
+                local cardBottomRight = vec2(cardPos.x + cardSize.x - scaling.size(32), cardPos.y + cardSize.y)
 
                 -- Draw player card
-                ui.drawImage(playerCardPath, cardPos, vec2(cardSize.x, yOffset + 172))
+                ui.drawImage(playerCardPath, cardPos, cardBottomRight)
 
                 -- Check for mouse click inside card bounds
                 if not mouseClickHandled and ui.mouseClicked() then
