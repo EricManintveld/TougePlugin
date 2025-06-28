@@ -379,6 +379,17 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                 throw new ArgumentException($"Course name '{course.Key}' exceeds the maximum length of 32 characters.");
             }
             course.Value.Name = course.Key;
+
+            if (!_configuration.UseTrackFinish)
+            {
+                // Make sure each track has a defined finish line.
+                var finishLine = course.Value.FinishLine;
+                if (finishLine == null || finishLine.Count() != 2)
+                {
+                    throw new Exception($"Course '{course.Key}' must define a valid FinishLine with exactly 2 points when UseTrackFinish is false.");
+                }
+            }
+
         }
 
         if (courses.Count == 0)
