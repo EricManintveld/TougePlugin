@@ -181,8 +181,18 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             }
         }
         else
+        {
             // Invite by GUID.
-            InviteCar(client, packet.InviteRecipientGuid, packet.CourseName, packet.IsCourse);
+            
+            // If courseName is empty, there should only be one course, because player couldn't choose
+            string courseName = packet.CourseName;
+            if (courseName == "")
+            {
+                courseName = tougeCourses.First().Value.Name!;
+            }
+
+            InviteCar(client, packet.InviteRecipientGuid, courseName, packet.IsCourse);
+        }
     }
 
     private async void OnLobbyStatusPacketAsync(ACTcpClient client, LobbyStatusPacket packet)
@@ -301,6 +311,9 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Either found the recipient or still null.
         if (recipientCar != null)
         {
+
+            Log.Debug("Found the client to invite!");
+
             // Check what race type it is. But only if there is only one race type available.
             // Otherwise its determined by the player and passed with isCourse.
             if (!(_configuration.EnableCourseRace && _configuration.EnableOutrunRace))
@@ -315,6 +328,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             }
 
             // Invite the recipientCar
+            Log.Debug($"Course name = {courseName}");
             _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar, courseName, isCourse);
             SendNotification(client, "Invite sent!");
         }
@@ -389,7 +403,6 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                     throw new Exception($"Course '{course.Key}' must define a valid FinishLine with exactly 2 points when UseTrackFinish is false.");
                 }
             }
-
         }
 
         if (courses.Count == 0)

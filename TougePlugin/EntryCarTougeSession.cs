@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
+using Serilog;
 using TougePlugin.Models;
 using TougePlugin.Packets;
 using TougePlugin.TougeRulesets;
@@ -118,21 +119,24 @@ public class EntryCarTougeSession
                 }
                 else
                 {
-                    // Create a new TougeSession instance and set this for both cars.
+                    // Get rules and course.
                     var ruleset = _rulesetFactory(_configuration.RuleSetType);
                     Course course = _plugin.tougeCourses[courseName];
                     RaceType raceType = isCourse ? RaceType.Course : RaceType.Outrun;
+                    Log.Debug("Loaded course and rules.");
+
+                    // Create a new TougeSession instance and set this for both cars.
                     currentSession = _tougeSessionFactory(_entryCar, car, ruleset, course, raceType);
                     CurrentSession = currentSession;
                     _plugin.GetSession(car).CurrentSession = currentSession;
-
-                    // Send messages to both players
-                    _entryCar.Client?.SendChatMessage($"You have challenged {car.Client!.Name} to a touge session.");
+                    Log.Debug("Set the sessions for both players.");
 
                     // Get sender's elo
                     var (senderElo, _) = await _plugin.database.GetPlayerStatsAsync(_entryCar.Client!.Guid!.ToString());
+                    Log.Debug($"Got sender's elo: {senderElo}.");
 
                     car.Client?.SendPacket(new InvitePacket { InviteSenderName = _entryCar.Client!.Name!, InviteSenderElo = senderElo, InviteSenderId = _entryCar.Client!.Guid.ToString(), CourseName = courseName });
+                    Log.Debug("Send invite packet to other player.");
 
                     _ = Task.Delay(10000).ContinueWith(_ =>
                     {
