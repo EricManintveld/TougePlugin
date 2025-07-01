@@ -183,11 +183,10 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         else
         {
             // Invite by GUID.
-            
-            // If courseName is empty, there should only be one course, because player couldn't choose
             string courseName = packet.CourseName;
             if (courseName == "")
             {
+                // If courseName is empty, fallback: grab first one.
                 courseName = tougeCourses.First().Value.Name!;
             }
 
@@ -311,9 +310,6 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Either found the recipient or still null.
         if (recipientCar != null)
         {
-
-            Log.Debug("Found the client to invite!");
-
             // Check what race type it is. But only if there is only one race type available.
             // Otherwise its determined by the player and passed with isCourse.
             if (!(_configuration.EnableCourseRace && _configuration.EnableOutrunRace))
@@ -328,7 +324,6 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             }
 
             // Invite the recipientCar
-            Log.Debug($"Course name = {courseName}");
             _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar, courseName, isCourse);
             SendNotification(client, "Invite sent!");
         }
@@ -351,8 +346,89 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         
         if (!File.Exists(startingPositionsFile))
         {
-            // Create the file
-            string sampleYaml = """
+            CreateCourseSetupFile();
+        }
+
+        var yaml = File.ReadAllText(startingPositionsFile);
+        var deserializer = new DeserializerBuilder()
+            .WithTypeConverter(new Vector3YamlConverter())
+            .WithTypeConverter(new Vector2YamlConverter())
+            .WithTypeConverter(new CarSpawnYamlConverter())
+            .IgnoreUnmatchedProperties()
+            .Build();
+        
+        TracksFile tougeCourseSetup = deserializer.Deserialize<TracksFile>(yaml);
+
+        if (!tougeCourseSetup.Tracks.TryGetValue(trackName, out _))
+        {
+            throw new KeyNotFoundException($"Track '{trackName}' not found in 'cfg/touge_course_setup.yml'. Make sure to define course details for this track.");
+        }
+
+        return ValidateCourses(tougeCourseSetup, trackName);
+    }
+
+    private Dictionary<string, Course> ValidateCourses(TracksFile tougeCourseSetup, string trackName)
+    {
+        // Get relevant track
+        Dictionary<string, Course> courses = tougeCourseSetup.Tracks[trackName].Courses;
+
+        foreach (var course in courses)
+        {
+            if (course.Key.Length > 32)
+            {
+                throw new ArgumentException($"Course name '{course.Key}' exceeds the maximum length of 32 characters.");
+            }
+            course.Value.Name = course.Key;
+
+            if (!_configuration.UseTrackFinish)
+            {
+                // Make sure each track has a defined finish line.
+                var finishLine = course.Value.FinishLine;
+                if (finishLine == null || finishLine.Length != 2)
+                {
+                    throw new Exception($"Course '{course.Key}' must define a valid FinishLine with exactly 2 points when UseTrackFinish is false.");
+                }
+            }
+
+            if (course.Value.StartingSlots == null || course.Value.StartingSlots.Count == 0)
+            {
+                throw new Exception($"Course '{course.Key}' must define at least one StartingSlot.");
+            }
+
+            for (int i = 0; i < course.Value.StartingSlots.Count; i++)
+            {
+                var slot = course.Value.StartingSlots[i];
+
+                if (slot?.Leader == null || slot.Follower == null)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} is missing Leader or Follower.");
+                }
+
+                if (!slot.Leader.PositionIsSet || !slot.Follower.PositionIsSet)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} has undefined Position for Leader or Follower.");
+                }
+
+                if (!slot.Leader.HeadingIsSet || !slot.Follower.HeadingIsSet)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} has undefined Heading for Leader or Follower.");
+                }
+            }
+        }
+
+        if (courses.Count == 0)
+        {
+            // There are no valid starting areas.
+            throw new Exception($"Did not find any valid courses in {startingPositionsFile}. Please define some for the track: {trackName}");
+        }
+
+        return courses;
+    }
+
+    private void CreateCourseSetupFile()
+    {
+        // Create the file
+        string sampleYaml = """
             Tracks:
               your_track_name_here:
                 Courses:
@@ -368,50 +444,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                           Position: [0.0, 0.0, 0.0]
                           Heading: 0
             """;
-            File.WriteAllText(startingPositionsFile, sampleYaml);
-            throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
-        }
-
-        var yaml = File.ReadAllText(startingPositionsFile);
-        var deserializer = new DeserializerBuilder()
-            .WithTypeConverter(new Vector3YamlConverter())
-            .WithTypeConverter(new Vector2YamlConverter())
-            .IgnoreUnmatchedProperties()
-            .Build();
-        
-        var tracksFile = deserializer.Deserialize<TracksFile>(yaml);
-
-        if (!tracksFile.Tracks.TryGetValue(trackName, out _))
-        {
-            throw new KeyNotFoundException($"Track '{trackName}' not found in 'cfg/touge_course_setup.yml'. Make sure to define course details for this track.");
-        }
-        Dictionary<string, Course> courses = tracksFile.Tracks[trackName].Courses;
-        foreach (var course in courses)
-        {
-            if (course.Key.Length > 32)
-            {
-                throw new ArgumentException($"Course name '{course.Key}' exceeds the maximum length of 32 characters.");
-            }
-            course.Value.Name = course.Key;
-
-            if (!_configuration.UseTrackFinish)
-            {
-                // Make sure each track has a defined finish line.
-                var finishLine = course.Value.FinishLine;
-                if (finishLine == null || finishLine.Count() != 2)
-                {
-                    throw new Exception($"Course '{course.Key}' must define a valid FinishLine with exactly 2 points when UseTrackFinish is false.");
-                }
-            }
-        }
-
-        if (courses.Count == 0)
-        {
-            // There are no valid starting areas.
-            throw new Exception($"Did not find any valid courses in {startingPositionsFile}. Please define some for the track: {trackName}");
-        }
-
-        return courses;
+        File.WriteAllText(startingPositionsFile, sampleYaml);
+        throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
     }
 
     private void LoadAvatar(ACTcpClient client)

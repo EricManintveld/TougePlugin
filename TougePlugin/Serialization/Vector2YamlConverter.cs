@@ -22,10 +22,6 @@ public class Vector2YamlConverter : IYamlTypeConverter
 
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
     {
-        var v = (Vector2)value!;
-        emitter.Emit(new SequenceStart(null, null, false, SequenceStyle.Flow));
-        emitter.Emit(new Scalar(v.X.ToString()));
-        emitter.Emit(new Scalar(v.Y.ToString()));
-        emitter.Emit(new SequenceEnd());
+        throw new NotImplementedException("Serialization is not needed.");
     }
 }
