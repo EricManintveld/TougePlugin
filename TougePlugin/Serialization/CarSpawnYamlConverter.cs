@@ -52,7 +52,7 @@ public class CarSpawnYamlConverter : IYamlTypeConverter
         throw new NotImplementedException("Serialization is not needed.");
     }
 
-    private void SkipCurrentAndNested(IParser parser)
+    private static void SkipCurrentAndNested(IParser parser)
     {
         int depth = 0;
 

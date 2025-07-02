@@ -48,7 +48,8 @@ public class BattleStageRuleset : ITougeRuleset
                 else
                 {
                     // Its either 0-1 or 0-2.
-                    return RaceResult.Win(result1.ResultCar!);
+                    EntryCar winner = GetWinner(result1, result2);
+                    return RaceResult.Win(winner);
                 }
             }
             else
@@ -65,6 +66,14 @@ public class BattleStageRuleset : ITougeRuleset
             }
         }
         return RaceResult.Disconnected(result1.ResultCar!);
+    }
+
+    private static EntryCar GetWinner(RaceResult result1, RaceResult result2)
+    {
+        if (result1.Outcome == RaceOutcome.Win)
+            return result1.ResultCar!;
+        else
+            return result2.ResultCar!;
     }
 
     private static async Task<RaceResult> RunSuddenDeathRacesAsync(RaceResult firstTwoResult, TougeSession session)
