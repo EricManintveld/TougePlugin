@@ -1,8 +1,9 @@
 ﻿using AssettoServer.Server;
 using AssettoServer.Server.Plugin;
 using Autofac;
-using TougePlugin.RaceTypes;
+using Microsoft.Extensions.Hosting;
 using TougePlugin.Models;
+using TougePlugin.RaceTypes;
 using TougePlugin.TougeRulesets;
 
 namespace TougePlugin;
@@ -11,7 +12,7 @@ public class TougeModule : AssettoServerModule<TougeConfiguration>
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterType<Touge>().AsSelf().As<IAssettoServerAutostart>().SingleInstance();
+        builder.RegisterType<Touge>().AsSelf().As<IHostedService>().SingleInstance();
         builder.RegisterType<EntryCarTougeSession>().AsSelf();
         builder.RegisterType<TougeSession>().AsSelf();
         builder.RegisterType<Race>().AsSelf();

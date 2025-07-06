@@ -1,8 +1,6 @@
 ﻿using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
-using AssettoServer.Server.Plugin;
-using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using System.Reflection;
@@ -14,7 +12,7 @@ using YamlDotNet.Serialization;
 
 namespace TougePlugin;
 
-public class Touge : CriticalBackgroundService, IAssettoServerAutostart
+public class Touge : BackgroundService, IHostedService
 {
     private readonly EntryCarManager _entryCarManager;
     private readonly Func<EntryCar, EntryCarTougeSession> _entryCarTougeSessionFactory;
@@ -38,11 +36,10 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         TougeConfiguration configuration,
         EntryCarManager entryCarManager,
         Func<EntryCar, EntryCarTougeSession> entryCarTougeSessionFactory,
-        IHostApplicationLifetime applicationLifetime,
         CSPServerScriptProvider scriptProvider,
         ACServerConfiguration serverConfiguration,
         CSPClientMessageTypeManager cspClientMessageTypeManager
-        ) : base(applicationLifetime)
+        )
     {
         _entryCarManager = entryCarManager;
         _entryCarTougeSessionFactory = entryCarTougeSessionFactory;
