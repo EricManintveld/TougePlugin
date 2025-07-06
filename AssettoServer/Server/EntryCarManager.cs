@@ -19,7 +19,7 @@ namespace AssettoServer.Server;
 public class EntryCarManager
 {
     public EntryCar[] EntryCars { get; private set; } = [];
-    internal ConcurrentDictionary<int, EntryCar> ConnectedCars { get; } = new();
+    public ConcurrentDictionary<int, EntryCar> ConnectedCars { get; } = new();
 
     private readonly ACServerConfiguration _configuration;
     private readonly IBlacklistService _blacklist;
@@ -208,7 +208,7 @@ public class EntryCarManager
             var isAdmin = await _adminService.IsAdminAsync(handshakeRequest.Guid);
             foreach (var entryCar in candidates)
             {
-                if (entryCar.Client == null && (isAdmin || _openSlotFilterChain.Value.IsSlotOpen(entryCar, handshakeRequest.Guid)))
+                if (entryCar.Client == null && (isAdmin || await _openSlotFilterChain.Value.IsSlotOpen(entryCar, handshakeRequest.Guid)))
                 {
                     entryCar.Reset();
                     entryCar.Client = client;
