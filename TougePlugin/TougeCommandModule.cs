@@ -1,5 +1,4 @@
-﻿using System.Numerics;
-using AssettoServer.Commands;
+﻿using AssettoServer.Commands;
 using AssettoServer.Commands.Attributes;
 using TougePlugin.Packets;
 using Qmmands;
@@ -40,16 +39,13 @@ public class TougeCommandModule : ACModuleBase
         }
     }
 
-    [Command("teleport"), RequireConnectedPlayer]
-    public void Teleport()
+    [Command("elo"), RequireConnectedPlayer]
+    public async Task ShowEloAsync()
     {
-        // For testing the teleport
-        Reply("Teleporting...");
-
-        Client!.SendPacket(new TeleportPacket
-        {
-            Position = new Vector3(-204.4f, 468.34f, -93.87f),  // Your target position
-            Direction = new Vector3(0.0998f, 0.992f, 0.0784f),  // Forward direction (can be approximate)
-        });
+        // Get the players current elo
+        var (elo, _) = await _plugin.database.GetPlayerStatsAsync(Client!.Guid.ToString());
+        
+        // Send elo packet
+        Client!.SendPacket(new EloPacket { Elo = elo });
     }
 }

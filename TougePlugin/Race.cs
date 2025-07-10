@@ -1,7 +1,9 @@
 ﻿using System.Numerics;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
+using TougePlugin.RaceTypes;
 using Serilog;
+using TougePlugin.Models;
 using TougePlugin.Packets;
 
 namespace TougePlugin;
@@ -9,13 +11,12 @@ namespace TougePlugin;
 public class Race
 {
     public EntryCar Leader { get; }
-    public EntryCar Follower { get;  }
+    public EntryCar Follower { get; }
 
     private readonly EntryCarManager _entryCarManager;
-    private readonly TougeConfiguration _configuration;
+    public readonly TougeConfiguration Configuration;
     private readonly Touge _plugin;
-
-    public bool HasStarted { get; private set; }
+    public readonly SessionManager SessionManager;
 
     public enum JumpstartResult
     {
@@ -26,17 +27,24 @@ public class Race
     }
 
     private bool LeaderSetLap = false;
-    private bool FollowerSetLap = false;
-    private readonly TaskCompletionSource<bool> secondLapCompleted = new();
-    private readonly TaskCompletionSource<ACTcpClient> _disconnected = new();
-    private readonly TaskCompletionSource<bool> _followerFirst = new();
+    public bool FollowerSetLap = false;
+    
+    public readonly TaskCompletionSource<ACTcpClient> Forfeit = new();
+    public TaskCompletionSource<bool> SecondLapCompleted { get; } = new();
+    public TaskCompletionSource<ACTcpClient> Disconnected { get; } = new();
+    public TaskCompletionSource<bool> FollowerFirst { get; } = new();
 
-    private string LeaderName { get; }
-    private string FollowerName { get; }
+    public string LeaderName { get; }
+    public string FollowerName { get; }
 
-    public delegate Race Factory(EntryCar leader, EntryCar follower);
+    private bool IsGo = false;
 
-    public Race(EntryCar leader, EntryCar follower, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin)
+    private readonly IRaceType _raceType;
+    private readonly Course _course;
+
+    public delegate Race Factory(EntryCar leader, EntryCar follower, IRaceType raceType, Course course);
+
+    public Race(EntryCar leader, EntryCar follower, IRaceType raceType, EntryCarManager entryCarManager, TougeConfiguration configuration, Touge plugin, SessionManager sessionManager, Course course)
     {
         Leader = leader;
         Follower = follower;
@@ -44,118 +52,38 @@ public class Race
         LeaderName = Leader.Client?.Name!;
         FollowerName = Follower.Client?.Name!;
 
-        // Event handling
-        Leader.Client!.LapCompleted += OnClientLapCompleted;
-        Follower.Client!.LapCompleted += OnClientLapCompleted;
-        Leader.Client.Disconnecting += OnClientDisconnected;
-        Follower.Client.Disconnecting += OnClientDisconnected;
-
         _entryCarManager = entryCarManager;
-        _configuration = configuration;
+        Configuration = configuration;
         _plugin = plugin;
+        SessionManager = sessionManager;
+        _raceType = raceType;
+
+        Leader.Client!.Disconnecting += OnClientDisconnected;
+        Follower.Client!.Disconnecting += OnClientDisconnected;
+        _course = course;
     }
 
     public async Task<RaceResult> RaceAsync()
     {
-        EntryCar? winner = null;
-        bool isGo = false;
-
         try
         {
-            Dictionary<string, Vector3>[] startingArea = await GetStartingAreaAsync();
-
-            // First teleport players to their starting positions.
-            await TeleportToStartAsync(Leader, Follower, startingArea);
+            SpawnPair? startSlots = await InitializeRaceAsync();
+            if (startSlots == null)
+            {
+                return RaceResult.Disconnected(null);
+            }
 
             SendMessage("Race starting soon...");
-            await Task.Delay(3000);
+            if (await WaitWithForfeitAsync(Task.Delay(3000)))
+                return RaceResult.Disconnected(Forfeit.Task.Result.EntryCar);
 
-            HasStarted = true; // I don't know if this is used anywhere tbh.
-
-            // Race countdown.
-            while (!isGo)
+            var countdownResult = await RunCountdownAsync(startSlots);
+            if (countdownResult != null)
             {
-                byte signalStage = 0;
-                while (signalStage < 3)
-                {
-                    if (!_configuration.isRollingStart)
-                    {
-                        JumpstartResult jumpstart = AreInStartingPos(startingArea);
-                        if (jumpstart != JumpstartResult.None)
-                        {
-                            if (jumpstart == JumpstartResult.Both)
-                            {
-                                SendMessage("Both players made a jumpstart.");
-                                await RestartRaceAsync();
-                                break;
-                            }
-                            else if (jumpstart == JumpstartResult.Follower)
-                            {
-                                SendMessage($"{FollowerName} made a jumpstart. {LeaderName} wins this race.");
-                                return RaceResult.Win(Leader);
-                            }
-                            else
-                            {
-                                SendMessage($"{LeaderName} made a jumpstart. {FollowerName} wins this race.");
-                                return RaceResult.Win(Follower);
-                            }
-                        }
-                    }
-
-                    if (signalStage == 0)
-                        _ = SendTimedMessageAsync("Ready...");
-                    else if (signalStage == 1)
-                        _ = SendTimedMessageAsync("Set...");
-                    else if (signalStage == 2)
-                    {
-                        if (_configuration.isRollingStart)
-                        {
-                            // Check if cars are close enough to each other to give a valid "Go!".
-                            if (!IsValidRollingStartPos())
-                            {
-                                SendMessage("Players are not close enough for a fair rolling start.");
-                                await RestartRaceAsync();
-                                break;
-                            }
-                        }
-                        _ = SendTimedMessageAsync("Go!");
-                        isGo = true;
-                        break;
-                    }
-                    await Task.Delay(1000);
-                    signalStage++;
-                }
+                return countdownResult;
             }
 
-            // Start the race.
-            // Let the cars do a lap/complete the course.
-            Task completed = await Task.WhenAny(secondLapCompleted.Task, _disconnected.Task, _followerFirst.Task);
-
-            if (completed == _disconnected.Task)
-            {
-                SendMessage("Race cancelled due to disconnection or forfeit.");
-                return RaceResult.Disconnected(_disconnected.Task.Result.EntryCar);
-            }
-
-            else
-            {
-                // Who wins logic
-                if (!FollowerSetLap)
-                {
-                    SendMessage($"{FollowerName} did not finish in time. {LeaderName} wins!");
-                    winner = Leader;
-                }
-                else if (completed == _followerFirst.Task)
-                {
-                    SendMessage($"{FollowerName} overtook {LeaderName}. {FollowerName} wins!");
-                    winner = Follower;
-                }
-                else
-                {
-                    SendMessage($"{LeaderName} did not pull away. It's a tie!");
-                    return RaceResult.Tie();
-                }
-            }
+            return await _raceType.RunRaceAsync(this);
         }
 
         catch (Exception e)
@@ -168,20 +96,100 @@ public class Race
         {
             FinishRace();
         }
+    }
 
-        return RaceResult.Win(winner);
+    private async Task<SpawnPair?> InitializeRaceAsync()
+    {
+        var setupTask = Task.Run(() => SetUpRaceAsync());
+        var forfeitTask = Forfeit.Task;
+
+        var completedSetup = await Task.WhenAny(setupTask, forfeitTask);
+
+        if (completedSetup == forfeitTask)
+        {
+            SendMessage("Race cancelled due to player forfeit.");
+            return null;
+        }
+
+        SpawnPair? startSlots = await setupTask;
+
+        if (startSlots == null)
+        {
+            SendMessage("Teleportation failed. Race setup aborted.");
+            return null;
+        }
+
+        return startSlots;
+    }
+
+    private async Task<RaceResult?> RunCountdownAsync(SpawnPair startSlots)
+    {
+        while (!IsGo)
+        {
+            byte signalStage = 0;
+            while (signalStage < 3)
+            {
+                if (!Configuration.IsRollingStart)
+                {
+                    JumpstartResult jumpstart = AreInStartingPos(startSlots);
+                    if (jumpstart != JumpstartResult.None)
+                    {
+                        if (jumpstart == JumpstartResult.Both)
+                        {
+                            SendMessage("Both players made a jumpstart.");
+                            await RestartRaceAsync();
+                            break;
+                        }
+                        else if (jumpstart == JumpstartResult.Follower)
+                        {
+                            SendMessage($"{FollowerName} made a jumpstart. {LeaderName} wins this race.");
+                            return RaceResult.Win(Leader);
+                        }
+                        else
+                        {
+                            SendMessage($"{LeaderName} made a jumpstart. {FollowerName} wins this race.");
+                            return RaceResult.Win(Follower);
+                        }
+                    }
+                }
+
+                if (signalStage == 0)
+                    _ = SendTimedMessageAsync("Ready...", true);
+                else if (signalStage == 1)
+                    _ = SendTimedMessageAsync("Set...", true);
+                else if (signalStage == 2)
+                {
+                    if (Configuration.IsRollingStart)
+                    {
+                        // Check if cars are close enough to each other to give a valid "Go!".
+                        if (!IsValidRollingStartPos())
+                        {
+                            SendMessage("Players are not close enough for a fair rolling start.");
+                            await RestartRaceAsync();
+                            break;
+                        }
+                    }
+                    _ = SendTimedMessageAsync("Go!", true);
+                    IsGo = true;
+                    break;
+                }
+                if (await WaitWithForfeitAsync(Task.Delay(1000)))
+                    return RaceResult.Disconnected(Forfeit.Task.Result.EntryCar);
+                signalStage++;
+            }
+        }
+
+        return null;
     }
 
     private void FinishRace()
     {
-        // Clean up
-        Leader.Client!.LapCompleted -= OnClientLapCompleted;
-        Follower.Client!.LapCompleted -= OnClientLapCompleted;
-        Leader.Client.Disconnecting -= OnClientDisconnected;
-        Follower.Client.Disconnecting -= OnClientDisconnected;
+        // General clean up
+        Leader.Client!.Disconnecting -= OnClientDisconnected;
+        Follower.Client!.Disconnecting -= OnClientDisconnected;
     }
 
-    private void SendMessage(string message)
+    public void SendMessage(string message)
     {
         Touge.SendNotification(Follower.Client, message);
         Touge.SendNotification(Leader.Client, message);
@@ -192,11 +200,11 @@ public class Race
         SendMessage("Returning both players to their starting positions.");
         SendMessage("Race restarting soon...");
         await Task.Delay(3000);
-        Dictionary<string, Vector3>[] startingArea = await GetStartingAreaAsync();
-        await TeleportToStartAsync(Leader, Follower, startingArea);
+        SpawnPair startSlots = await GetStartSlotsAsync();
+        await TeleportToStartAsync(Leader, Follower, startSlots);
     }
 
-    private void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs args)
+    public void OnClientLapCompleted(ACTcpClient sender, LapCompletedEventArgs? args)
     {
         var car = sender.EntryCar;
         if (car == Leader)
@@ -206,70 +214,101 @@ public class Race
 
         // If someone already set a lap, and this is the seconds person to set a lap
         if (LeaderSetLap && FollowerSetLap)
-            secondLapCompleted.TrySetResult(true);
+            SecondLapCompleted.TrySetResult(true);
 
         // If only the leader has set a lap
         else if (LeaderSetLap && !FollowerSetLap)
         {
             // Make this time also configurable as outrun time.
-            int outrunTimer = _configuration.outrunTime * 1000;
-            _ = Task.Delay(outrunTimer).ContinueWith(_ => secondLapCompleted.TrySetResult(false));
+            int outrunTimer = (int)(Configuration.CourseOutrunTime * 1000f);
+            _ = Task.Delay(outrunTimer).ContinueWith(_ => SecondLapCompleted.TrySetResult(false));
         }
 
         // Overtake, the follower finished earlier than leader.
         else if (FollowerSetLap && !LeaderSetLap)
-            _followerFirst.TrySetResult(true);    
+            FollowerFirst.TrySetResult(true);
     }
 
     private void OnClientDisconnected(ACTcpClient sender, EventArgs args)
     {
-        _disconnected.TrySetResult(sender);
+        ForfeitPlayer(sender);
     }
 
     internal void ForfeitPlayer(ACTcpClient sender)
     {
-        _disconnected.TrySetResult(sender);
+        if (IsGo && _raceType is CourseRace)
+        {
+            // Course race has started so simply set the result of the race to disconnected.
+            Disconnected.TrySetResult(sender);
+        }
+        else
+        {
+            // Race has not started yet so set result for forfeit task.
+            Forfeit.TrySetResult(sender);
+        }
+        if (!Configuration.UseTrackFinish)
+        {
+            sender.SendPacket(new FinishPacket { LookForFinish = false });
+        }
+        UnlockControls();
     }
 
-    private async Task TeleportToStartAsync(EntryCar Leader, EntryCar Follower, Dictionary<string, Vector3>[] startingArea)
+    private async Task<bool> TeleportToStartAsync(EntryCar Leader, EntryCar Follower, SpawnPair startSlots)
     {
         Leader.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingArea[0]["Position"],  
-            Direction = startingArea[0]["Direction"],  
+            Position = startSlots.Leader.Position,
+            Heading = startSlots.Leader.Heading,
         });
         Follower.Client!.SendPacket(new TeleportPacket
         {
-            Position = startingArea[1]["Position"],
-            Direction = startingArea[1]["Direction"],
+            Position = startSlots.Follower.Position,
+            Heading = startSlots.Follower.Heading,
         });
 
         // Check if both cars have been teleported to their starting locations.
         bool isLeaderTeleported = false;
         bool isFollowerTeleported = false;
+        const float thresholdSquared = 50f;
 
-        while (!isLeaderTeleported || !isFollowerTeleported)  
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var token = cts.Token;
+
+        try
         {
-            Vector3 currentLeaderPos = Leader.Status.Position;
-            Vector3 currentFollowerPos = Follower.Status.Position;
-            
-            float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingArea[0]["Position"]);
-            float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingArea[1]["Position"]);
+            while (!isLeaderTeleported || !isFollowerTeleported)
+            {
+                Vector3 currentLeaderPos = Leader.Status.Position;
+                Vector3 currentFollowerPos = Follower.Status.Position;
 
-            const float thresholdSquared = 50f;
+                float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startSlots.Leader.Position);
+                float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startSlots.Follower.Position);
 
-            if (leaderDistanceSquared < thresholdSquared) {
-                isLeaderTeleported = true;
+                if (leaderDistanceSquared < thresholdSquared)
+                {
+                    isLeaderTeleported = true;
+                }
+                if (followerDistanceSquared < thresholdSquared)
+                {
+                    isFollowerTeleported = true;
+                }
+
+                await Task.Delay(250, token);
             }
-            if (followerDistanceSquared < thresholdSquared) {
-                isFollowerTeleported = true;
-            }
 
-            await Task.Delay(250); 
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        finally
+        {
+            UnlockControls();
         }
     }
 
-    private async Task SendTimedMessageAsync(string message)
+    private async Task SendTimedMessageAsync(string message, bool isCountdown = false)
     {
         bool isChallengerHighPing = Leader.Ping > Follower.Ping;
         EntryCar highPingCar, lowPingCar;
@@ -285,15 +324,13 @@ public class Race
             lowPingCar = Leader;
         }
 
-        highPingCar.Client?.SendChatMessage(message);
-        Touge.SendNotification(highPingCar.Client, message);
+        Touge.SendNotification(highPingCar.Client, message, isCountdown);
         await Task.Delay(highPingCar.Ping - lowPingCar.Ping);
-        lowPingCar.Client?.SendChatMessage(message);
-        Touge.SendNotification(lowPingCar.Client, message);
+        Touge.SendNotification(lowPingCar.Client, message, isCountdown);
     }
 
     // Check if the cars are still in their starting positions.
-    private JumpstartResult AreInStartingPos(Dictionary<string, Vector3>[] startingArea)
+    private JumpstartResult AreInStartingPos(SpawnPair startSlots)
     {
         // Get the current position of each car.
         Vector3 currentLeaderPos = Leader.Status.Position;
@@ -301,10 +338,10 @@ public class Race
 
         // Check if they are the same as the original starting postion.
         // Or at least check if the difference is not larger than a threshold.
-        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startingArea[0]["Position"]);
-        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startingArea[1]["Position"]);
+        float leaderDistanceSquared = Vector3.DistanceSquared(currentLeaderPos, startSlots.Leader.Position);
+        float followerDistanceSquared = Vector3.DistanceSquared(currentFollowerPos, startSlots.Follower.Position);
 
-        const float thresholdSquared = 40f;
+        const float thresholdSquared = 20f;
 
         // Check if either car has moved too far (jumpstart detection)
         if (leaderDistanceSquared > thresholdSquared && followerDistanceSquared > thresholdSquared)
@@ -333,15 +370,15 @@ public class Race
         return true;
     }
 
-    private Dictionary<string, Vector3>[]? FindClearStartArea()
+    private SpawnPair? FindClearStartArea()
     {
         // Loop over the list of starting positions in the cfg file
         // If you find a valid/clear starting pos, return that.
-        foreach (var startingArea in _plugin.startingPositions)
+        foreach (var spawnPair in _course.StartingSlots)
         {
-            if (IsStartPosClear(startingArea[0]["Position"]) && IsStartPosClear(startingArea[1]["Position"]))
+            if (IsStartPosClear(spawnPair.Leader.Position) && IsStartPosClear(spawnPair.Follower.Position))
             {
-                return startingArea;
+                return spawnPair;
             }
         }
         return null;
@@ -369,11 +406,11 @@ public class Race
         return true;
     }
 
-    private async Task<Dictionary<string, Vector3>[]> GetStartingAreaAsync()
+    private async Task<SpawnPair> GetStartSlotsAsync()
     {
         // Get the startingArea here.
         int waitTime = 0;
-        Dictionary<string, Vector3>[]? startingArea = FindClearStartArea();
+        SpawnPair? startingArea = FindClearStartArea();
         while (startingArea == null)
         {
             // Wait for a short time before checking again to avoid blocking the thread
@@ -386,9 +423,53 @@ public class Race
             if (waitTime > 40)
             {
                 // Fallback after 10 seconds.
-                startingArea = _plugin.startingPositions[0];
+                startingArea = _course.StartingSlots[0];
             }
         }
         return startingArea;
+    }
+
+    private void SendFinishLine(Course course)
+    {
+        Leader.Client!.SendPacket(new FinishLinePacket { FinishPoint1 = course.FinishLine![0], FinishPoint2 = course.FinishLine[1] });
+        Follower.Client!.SendPacket(new FinishLinePacket { FinishPoint1 = course.FinishLine![0], FinishPoint2 = course.FinishLine[1] });
+    }
+
+    private async Task<SpawnPair?> SetUpRaceAsync()
+    {
+        SpawnPair startSlots = await GetStartSlotsAsync();
+        if (!Configuration.UseTrackFinish)
+        {
+            SendFinishLine(_course);
+        }
+
+        // First teleport players to their starting positions.
+        bool isTeleported = await TeleportToStartAsync(Leader, Follower, startSlots);
+
+        if (!isTeleported)
+        {
+            SendMessage("Teleportation failed. Race setup timed out.");
+            return null;
+        }
+
+        return startSlots;
+    }
+    private async Task<bool> WaitWithForfeitAsync(Task task)
+    {
+        var completed = await Task.WhenAny(task, Forfeit.Task);
+        if (completed == Forfeit.Task)
+        {
+            SendMessage("Race cancelled due to player forfeit.");
+            return true;
+        }
+
+        await task; // Propagate exceptions if needed
+        return false;
+    }
+
+    private void UnlockControls()
+    {
+        Leader.Client!.SendPacket(new LockControlsPacket { LockControls = false });
+        Follower.Client!.SendPacket(new LockControlsPacket { LockControls = false });
     }
 }

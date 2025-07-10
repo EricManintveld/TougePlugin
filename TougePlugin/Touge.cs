@@ -1,17 +1,18 @@
-﻿using System.Reflection;
+﻿using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
-using AssettoServer.Server.Plugin;
-using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
-using AssettoServer.Network.Tcp;
-using TougePlugin.Packets;
+using Serilog;
+using System.Reflection;
 using TougePlugin.Database;
-using System.Numerics;
+using TougePlugin.Models;
+using TougePlugin.Packets;
+using TougePlugin.Serialization;
+using YamlDotNet.Serialization;
 
 namespace TougePlugin;
 
-public class Touge : CriticalBackgroundService, IAssettoServerAutostart
+public class Touge : BackgroundService, IHostedService
 {
     private readonly EntryCarManager _entryCarManager;
     private readonly Func<EntryCar, EntryCarTougeSession> _entryCarTougeSessionFactory;
@@ -22,20 +23,23 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ACServerConfiguration _serverConfig;
 
-    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_starting_areas.ini");
+    private bool _loadSteamAvatars;
+    private const long MaxAvatarCacheSizeBytes = 4L * 1024 * 1024; // Make configurable
+
+    private static readonly string startingPositionsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfg", "touge_course_setup.yml");
+    private static readonly string avatarFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "TougePlugin", "wwwroot", "avatars");
 
     public readonly IDatabase database;
-    public readonly Dictionary<string, Vector3>[][] startingPositions;
+    public readonly Dictionary<string, Course> tougeCourses;
 
     public Touge(
         TougeConfiguration configuration,
         EntryCarManager entryCarManager,
         Func<EntryCar, EntryCarTougeSession> entryCarTougeSessionFactory,
-        IHostApplicationLifetime applicationLifetime,
         CSPServerScriptProvider scriptProvider,
         ACServerConfiguration serverConfiguration,
         CSPClientMessageTypeManager cspClientMessageTypeManager
-        ) : base(applicationLifetime)
+        )
     {
         _entryCarManager = entryCarManager;
         _entryCarTougeSessionFactory = entryCarTougeSessionFactory;
@@ -43,18 +47,17 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _cspClientMessageTypeManager = cspClientMessageTypeManager;
         _configuration = configuration;
         _serverConfig = serverConfiguration;
+        _loadSteamAvatars = _configuration.SteamAPIKey != null;
 
-        if (!serverConfiguration.Extra.EnableClientMessages)
-        {
-            throw new ConfigurationException("Touge plugin requires ClientMessages to be enabled.");
-        }
+        CheckConfiguration();
 
         // Provide lua scripts
         ProvideScript("teleport.lua");
         ProvideScript("hud.lua");
+        ProvideScript("timing.lua");
 
         // Set up database connection
-        if (_configuration.isDbLocalMode)
+        if (_configuration.IsDbLocalMode)
         {
             // SQLite database.
             _connectionFactory = new SqliteConnectionFactory("plugins/TougePlugin/database.db");
@@ -62,7 +65,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         else
         {
             // PostgreSQL database.
-            _connectionFactory = new PostgresConnectionFactory(_configuration.postgresqlConnectionString!);
+            _connectionFactory = new PostgresConnectionFactory(_configuration.PostgresqlConnectionString!);
         }
 
         try
@@ -76,20 +79,15 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
 
         database = new GenericDatabase(_connectionFactory);
 
-        _cspClientMessageTypeManager.RegisterOnlineEvent<PlayerStatsPacket>(OnPlayerStatsPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<InitializationPacket>(OnInitializationPacket);
         _cspClientMessageTypeManager.RegisterOnlineEvent<InvitePacket>(OnInvitePacket);
-        _cspClientMessageTypeManager.RegisterOnlineEvent<LobbyStatusPacket>(OnLobbyStatusPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<LobbyStatusPacket>(OnLobbyStatusPacketAsync);
         _cspClientMessageTypeManager.RegisterOnlineEvent<ForfeitPacket>(OnForfeitPacket);
+        _cspClientMessageTypeManager.RegisterOnlineEvent<FinishPacket>(OnFinishPacket);
 
-        // Read starting positions from file
-        string trackName = _serverConfig.FullTrackName;
-        trackName = trackName.Substring(trackName.LastIndexOf('/') + 1);
-        startingPositions = getStartingPositions(trackName);
-        if (startingPositions.Length == 0)
-        {
-            // There are no valid starting areas.
-            throw new Exception($"Did not find any valid starting areas in cfg/touge_starting_areas.ini. Please define some for the track: {trackName}");
-        }
+        tougeCourses = GetCourses();
+
+        CheckAvatarsFolder();
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -123,6 +121,11 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Check if the player is registered in the database
         string playerId = client.Guid.ToString();
         database.CheckPlayerAsync(playerId);
+
+        if (_configuration.SteamAPIKey != null)
+        {
+            LoadAvatar(client);
+        }
     }
 
     private void ProvideScript(string scriptName)
@@ -135,12 +138,30 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         _scriptProvider.AddScript(reconnectScript, scriptName);
     }
 
-    private async void OnPlayerStatsPacket(ACTcpClient client, PlayerStatsPacket packet)
+    private async void OnInitializationPacket(ACTcpClient client, InitializationPacket packet)
     {
         string playerId = client.Guid.ToString();
         var(elo, racesCompleted) = await database.GetPlayerStatsAsync(playerId);
 
-        client.SendPacket(new PlayerStatsPacket { Elo = elo, RacesCompleted = racesCompleted });
+        char delimiter = '`';
+
+        var selectedCourseNames = tougeCourses
+            .Select(course => course.Value.Name ?? "")
+            .ToArray();
+
+        string courseNames = string.Join(delimiter, selectedCourseNames);
+
+        bool showToggle = _configuration.EnableOutrunRace && _configuration.EnableCourseRace;
+
+        client.SendPacket(new InitializationPacket { 
+            Elo = elo, 
+            RacesCompleted = racesCompleted, 
+            UseTrackFinish = _configuration.UseTrackFinish, 
+            DiscreteMode = _configuration.DiscreteMode, 
+            LoadSteamAvatars = _loadSteamAvatars, 
+            CourseNames = courseNames,
+            ShowRaceTypeToggle = showToggle,
+        });
     }
 
     private void OnInvitePacket(ACTcpClient client, InvitePacket packet)
@@ -157,27 +178,38 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             }
         }
         else
+        {
             // Invite by GUID.
-            InviteCar(client, packet.InviteRecipientGuid);
+            string courseName = packet.CourseName;
+            if (courseName == "")
+            {
+                // If courseName is empty, fallback: grab first one.
+                courseName = tougeCourses.First().Value.Name!;
+            }
+
+            InviteCar(client, packet.InviteRecipientGuid, courseName, packet.IsCourse);
+        }
     }
 
-    private void OnLobbyStatusPacket(ACTcpClient client, LobbyStatusPacket packet)
+    private async void OnLobbyStatusPacketAsync(ACTcpClient client, LobbyStatusPacket packet)
     {
         // Find if there is a player close to the client.
         List<EntryCar>? closestCars = GetSession(client!.EntryCar).FindClosestCars(5);
 
-        List<Dictionary<string, object>> playerStatsList = [];
-
-        foreach (EntryCar car in closestCars)
+        var tasks = closestCars.Select(async car =>
         {
-            Dictionary<string, object> playerStats = new Dictionary<string, object>
+            var (elo, _) = await database.GetPlayerStatsAsync(car.Client!.Guid!.ToString());
+
+            return new Dictionary<string, object>
             {
                 { "name", car.Client!.Name! },
                 { "id", car.Client!.Guid! },
                 { "inRace", IsInTougeSession(car) },
+                { "elo", elo }
             };
-            playerStatsList.Add(playerStats);
-        }
+        });
+
+        var playerStatsList = (await Task.WhenAll(tasks)).ToList();
 
         int nearbyPlayersCount = playerStatsList.Count;
         if (nearbyPlayersCount < 5)
@@ -189,7 +221,8 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
                 {
                     { "name", "" },
                     { "id", (ulong)0 },
-                    { "inRace", false }
+                    { "inRace", false },
+                    { "elo", -1 }
                 });
             }
         }
@@ -201,18 +234,23 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
             NearbyPlayerName1 = (string)playerStatsList[0]["name"],
             NearbyPlayerId1 = (ulong)playerStatsList[0]["id"],
             NearbyPlayerInRace1 = (bool)playerStatsList[0]["inRace"],
+            NearbyPlayerElo1 = (int)playerStatsList[0]["elo"],
             NearbyPlayerName2 = (string)playerStatsList[1]["name"],
             NearbyPlayerId2 = (ulong)playerStatsList[1]["id"],
             NearbyPlayerInRace2 = (bool)playerStatsList[1]["inRace"],
+            NearbyPlayerElo2 = (int)playerStatsList[1]["elo"],
             NearbyPlayerName3 = (string)playerStatsList[2]["name"],
             NearbyPlayerId3 = (ulong)playerStatsList[2]["id"],
             NearbyPlayerInRace3 = (bool)playerStatsList[2]["inRace"],
+            NearbyPlayerElo3 = (int)playerStatsList[2]["elo"],
             NearbyPlayerName4 = (string)playerStatsList[3]["name"],
             NearbyPlayerId4 = (ulong)playerStatsList[3]["id"],
             NearbyPlayerInRace4 = (bool)playerStatsList[3]["inRace"],
+            NearbyPlayerElo4 = (int)playerStatsList[3]["elo"],
             NearbyPlayerName5 = (string)playerStatsList[4]["name"],
             NearbyPlayerId5 = (ulong)playerStatsList[4]["id"],
             NearbyPlayerInRace5 = (bool)playerStatsList[4]["inRace"],
+            NearbyPlayerElo5 = (int)playerStatsList[4]["elo"],
         });
     }
 
@@ -220,6 +258,12 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
     {
         Race? activeRace = GetActiveRace(sender.EntryCar);
         activeRace?.ForfeitPlayer(sender);
+    }
+
+    private void OnFinishPacket(ACTcpClient sender, FinishPacket packet)
+    {
+        Race? activeRace = GetActiveRace(sender.EntryCar);
+        activeRace?.OnClientLapCompleted(sender, null);
     }
 
     private bool IsInTougeSession(EntryCar car)
@@ -235,7 +279,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         EntryCar? nearestCar = GetSession(client!.EntryCar).FindNearbyCar();
         if (nearestCar != null)
         {
-            GetSession(client!.EntryCar).ChallengeCar(nearestCar);
+            InviteCar(client, nearestCar.Client!.Guid, tougeCourses.First().Value.Name!, true);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -244,7 +288,7 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
     }
 
-    public void InviteCar(ACTcpClient client, ulong recipientId)
+    public void InviteCar(ACTcpClient client, ulong recipientId, string courseName, bool isCourse)
     {
         // First find EntryCar in EntryCarManager that matches guid.
         EntryCar? recipientCar = null;
@@ -263,8 +307,21 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         // Either found the recipient or still null.
         if (recipientCar != null)
         {
+            // Check what race type it is. But only if there is only one race type available.
+            // Otherwise its determined by the player and passed with isCourse.
+            if (!(_configuration.EnableCourseRace && _configuration.EnableOutrunRace))
+            {
+                if (_configuration.EnableOutrunRace) {
+                    isCourse = false;
+                }
+                else
+                {
+                    isCourse = true;
+                }
+            }
+
             // Invite the recipientCar
-            GetSession(client!.EntryCar).ChallengeCar(recipientCar);
+            _ = GetSession(client!.EntryCar).ChallengeCar(recipientCar, courseName, isCourse);
             SendNotification(client, "Invite sent!");
         }
         else
@@ -273,21 +330,216 @@ public class Touge : CriticalBackgroundService, IAssettoServerAutostart
         }
     }
 
-    internal static void SendNotification(ACTcpClient? client, string message)
+    internal static void SendNotification(ACTcpClient? client, string message, bool isCountdown = false)
     {
-        client?.SendPacket(new NotificationPacket { Message = message });
+        client?.SendPacket(new NotificationPacket { Message = message, IsCountDown = isCountdown });
     }
 
-    private Dictionary<string, Vector3>[][] getStartingPositions(string trackName)
+    private Dictionary<string, Course> GetCourses()
     {
+        // Read starting positions from file
+        string trackName = _serverConfig.FullTrackName;
+        trackName = trackName.Substring(trackName.LastIndexOf('/') + 1);
+        
         if (!File.Exists(startingPositionsFile))
         {
-            // Create the file
-            File.WriteAllText(startingPositionsFile, "[full_track_name_1]\nleader_pos =\nleader_heading =\nchaser_pos =\nchaser_heading =");
-            throw new Exception("No touge starting areas defined in cfg/touge_starting_areas.ini!");
+            CreateCourseSetupFile();
         }
 
-        return StartingAreaParser.Parse("cfg/touge_starting_areas.ini", trackName);
+        var yaml = File.ReadAllText(startingPositionsFile);
+        var deserializer = new DeserializerBuilder()
+            .WithTypeConverter(new Vector3YamlConverter())
+            .WithTypeConverter(new Vector2YamlConverter())
+            .WithTypeConverter(new CarSpawnYamlConverter())
+            .IgnoreUnmatchedProperties()
+            .Build();
+        
+        TracksFile tougeCourseSetup = deserializer.Deserialize<TracksFile>(yaml);
+
+        if (!tougeCourseSetup.Tracks.TryGetValue(trackName, out _))
+        {
+            throw new KeyNotFoundException($"Track '{trackName}' not found in 'cfg/touge_course_setup.yml'. Make sure to define course details for this track.");
+        }
+
+        return ValidateCourses(tougeCourseSetup, trackName);
+    }
+
+    private Dictionary<string, Course> ValidateCourses(TracksFile tougeCourseSetup, string trackName)
+    {
+        // Get relevant track
+        Dictionary<string, Course> courses = tougeCourseSetup.Tracks[trackName].Courses;
+
+        foreach (var course in courses)
+        {
+            if (course.Key.Length > 32)
+            {
+                throw new ArgumentException($"Course name '{course.Key}' exceeds the maximum length of 32 characters.");
+            }
+            course.Value.Name = course.Key;
+
+            if (!_configuration.UseTrackFinish)
+            {
+                // Make sure each track has a defined finish line.
+                var finishLine = course.Value.FinishLine;
+                if (finishLine == null || finishLine.Length != 2)
+                {
+                    throw new Exception($"Course '{course.Key}' must define a valid FinishLine with exactly 2 points when UseTrackFinish is false.");
+                }
+            }
+
+            if (course.Value.StartingSlots == null || course.Value.StartingSlots.Count == 0)
+            {
+                throw new Exception($"Course '{course.Key}' must define at least one StartingSlot.");
+            }
+
+            for (int i = 0; i < course.Value.StartingSlots.Count; i++)
+            {
+                var slot = course.Value.StartingSlots[i];
+
+                if (slot?.Leader == null || slot.Follower == null)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} is missing Leader or Follower.");
+                }
+
+                if (!slot.Leader.PositionIsSet || !slot.Follower.PositionIsSet)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} has undefined Position for Leader or Follower.");
+                }
+
+                if (!slot.Leader.HeadingIsSet || !slot.Follower.HeadingIsSet)
+                {
+                    throw new Exception($"Course '{course.Key}', StartingSlot #{i + 1} has undefined Heading for Leader or Follower.");
+                }
+            }
+        }
+
+        if (courses.Count == 0)
+        {
+            // There are no valid starting areas.
+            throw new Exception($"Did not find any valid courses in {startingPositionsFile}. Please define some for the track: {trackName}");
+        }
+
+        return courses;
+    }
+
+    private void CreateCourseSetupFile()
+    {
+        // Create the file
+        string sampleYaml = """
+            Tracks:
+              your_track_name_here:
+                Courses:
+                  Sample Course Name:
+                    FinishLine:
+                      - [0.0, 0.0, 0.0]
+                      - [0.0, 0.0, 0.0]
+                    StartingSlots:
+                      - Leader:
+                          Position: [0.0, 0.0, 0.0]
+                          Heading: 0
+                        Follower:
+                          Position: [0.0, 0.0, 0.0]
+                          Heading: 0
+            """;
+        File.WriteAllText(startingPositionsFile, sampleYaml);
+        throw new Exception($"No touge starting areas defined in {startingPositionsFile}!");
+    }
+
+    private void LoadAvatar(ACTcpClient client)
+    {
+        // Check if its already downloaded
+        // Maybe also check if its really old or something.
+        if (!IsPictureCached(client))
+        {
+            EnsureCacheSpace();
+            // Download new picture from steam.
+            _ = SteamAPIClient.GetSteamAvatarAsync(_configuration.SteamAPIKey!, client.Guid.ToString());
+        }
+    }
+
+    private static bool IsPictureCached(ACTcpClient client)
+    {
+        string avatarPath = Path.Combine(avatarFolderPath, client.Guid.ToString() + ".jpg");
+        if (File.Exists(avatarPath))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private void CheckAvatarsFolder()
+    {
+        if (!Directory.Exists(avatarFolderPath))
+        {
+            Directory.CreateDirectory(avatarFolderPath);
+        }
+
+        try
+        {
+            var root = Path.GetPathRoot(avatarFolderPath);
+            if (root != null)
+            {
+                DriveInfo drive = new DriveInfo(root);
+                if (drive.AvailableFreeSpace < MaxAvatarCacheSizeBytes)
+                {
+                    Log.Warning("Not enough disk space for avatars. Avatar feature will be disabled.");
+                    _loadSteamAvatars = false;
+                    return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warning($"Could not determine available disk space: {e.Message}");
+            Log.Warning("Avatar feature will be disabled as a precaution.");
+            _loadSteamAvatars = false;
+            return;
+        }
+
+        _loadSteamAvatars = true;
+    }
+
+    private static void EnsureCacheSpace()
+    {
+        DirectoryInfo dirInfo = new(avatarFolderPath);
+
+        if (!dirInfo.Exists)
+            return;
+
+        // Get all avatar files, sorted by LastAccessTime (oldest first)
+        var files = dirInfo.GetFiles("*.jpg")
+            .OrderBy(f => f.LastAccessTimeUtc)
+            .ToList();
+
+        long totalSize = files.Sum(f => f.Length);
+
+        while (totalSize > MaxAvatarCacheSizeBytes && files.Count > 0)
+        {
+            var fileToDelete = files[0];
+            try
+            {
+                totalSize -= fileToDelete.Length;
+                fileToDelete.Delete();
+                files.RemoveAt(0);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[AvatarCache] Failed to delete {fileToDelete.Name}: {ex.Message}");
+                files.RemoveAt(0); // Avoid infinite loop on error
+            }
+        }
+    }
+
+    private void CheckConfiguration()
+    {
+        if (!_serverConfig.Extra.EnableClientMessages)
+        {
+            throw new ConfigurationException("Touge plugin requires ClientMessages to be enabled in 'extra_cfg.yml'.");
+        }
+        if (_serverConfig.Extra.MinimumCSPVersion < 1937)
+        {
+            throw new ConfigurationException("Touge plugin requires minumum CSP version 1937 or newer 'extra_cfg.yml'.");
+        }
     }
 }
 

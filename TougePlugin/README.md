@@ -1,15 +1,14 @@
-# Touge Plugin.
+# Touge Plugin
 
-A plugin for Assetto Corsa servers that enables cat-and-mouse-style **touge** racing with an engaging tie-breaker ruleset. Designed for competitive head-to-head driving with a configurable format. Find some live example servers running the plugin [here](https://assetto.scratchedclan.nl/servers).
+A plugin for Assetto Corsa servers for **touge** racing with an elo system. Designed for competitive head-to-head driving with a configurable format. Find some live example servers running the plugin [here](https://assetto.scratchedclan.nl/servers).
 
 ---
 
 ## Features
 
 - **Touge Format**: Race head-to-head in alternating lead/chase roles.
-- **Best-of-3 Logic**: Always runs 2 races. If tied (0–0 or 1–1), sudden-death rounds continue until the tie is broken.
+- **Various Rulesets**: Based on KaidoBattleNet rulesets.
 - **Fully Configurable**: Tweak rules and behavior through a generated config file.
-- **C# + Lua**: Powered by a server-side C# plugin and a client-side Lua UI integration.
 
 ---
 ## Installation
@@ -21,27 +20,37 @@ A plugin for Assetto Corsa servers that enables cat-and-mouse-style **touge** ra
 - **Run your server once**  
     This will generate configuration files inside the `cfg` folder.
 - **Customize your ruleset**  
-    Edit the generated `plugin_touge_cfg.yml` to adjust setting to your liking.  
+    Edit the generated `plugin_touge_cfg.yml` and `touge_course_setup.ini` to adjust setting to your liking.
 
 ---
 
 ## Configuration
 
 ---
-### `touge_starting_areas.ini`
-Used to setup the starting areas on various maps. You can use [comfy map](https://www.overtake.gg/downloads/comfy-map.52623/) to get the position and heading. The following example sets up two starting areas, one for Gunma and one for Imola. Configurations for different tracks can all be stored in the same file. A download link for a base configuration file that contains various starting positions for popular tracks will be added later. Also, feel free to share your configs in the [Discord](https://discord.gg/z22Pcsy3df).
+### `touge_course_setup.ini`
+Used to setup the courses on various maps. For getting the starting positions, you can use [comfy map](https://www.overtake.gg/downloads/comfy-map.52623/) to get the position and heading. To set up the finish lines, use the object inspector app. Alt + click where you want to place the point in 3d space and copy the value labeled "clicked_at". The following example sets up two starting areas and two custom finish lines, one for Gunma and one for Imola. Note that you do not have to set up finish lines if `useTrackFinish` is set to true in the `plugin_touge_cfg` file. Configurations for different tracks can all be stored in the same file. A download link for a base configuration file that contains various starting positions for popular tracks will be added later. Also, feel free to share your configs in the [Discord](https://discord.gg/z22Pcsy3df).
 ```
+[finish_pk_gunma_cycle_sports_center-gcsc_full_attack_1]
+point_1 = -199.7,467.3,-87.7
+point_2 = -199.7,467.3,-87.7
+
+[finish_imola_1]
+point_1 = -199.7,467.3,-87.7
+point_2 = -199.7,467.3,-87.7
+
 [pk_gunma_cycle_sports_center-gcsc_full_attack_1]
 leader_pos = -199.7,467.3,-87.7
 leader_heading = -16
 chaser_pos = -195.3,467,-83.1
 chaser_heading = -17
+finish_line = finish_pk_gunma_cycle_sports_center-gcsc_full_attack_1
 
 [imola_1]
 leader_pos = -199.7,467.3,-87.7
 leader_heading = -16
 chaser_pos = -195.3,467,-83.1
 chaser_heading = -17
+finish_line = finish_imola_1
 ```
 
 ---
@@ -88,10 +97,19 @@ CarPerformanceRatings:
 - `false`: Cars are stationary at the start.
 
 ##### `outrunTime`
-**Type:** `int`  
+**Type:** `float`  
 **Description:** The number of seconds the **chase car** has to cross the finish line after the **lead car** finishes.  
 **Constraints:** Must be between **1 and 60 seconds**.  
 **Purpose:** Used to determine if the lead car successfully outran the chase car.
+
+##### `useTrackFinish`
+**Type:** `bool`
+**Description:** Set to true to use the track's finish line. Set to false to use the finish lines defined in `touge_course_setup.ini`
+**Constraints:** When setting this to false, make sure you have defined a finish line for each course definition in `touge_course_setup.ini`.
+
+##### `RuleSetType`
+**Description:** Defined the ruleset used for the touge races.
+**Constraints:** At this moment there are two possible ruleset: BattleStage and CatAndMouse.
 
 #### Database
 
@@ -120,11 +138,10 @@ postgresqlConnectionString: "Host={IP/URL};Port={Port};Username={Username};Passw
 
 - Requires Content Manager with recent version of CSP enabled.
 - This is a AssettoServer plugin.
-	- Tested on [v0.0.55-pre25](https://github.com/compujuckel/AssettoServer/releases/tag/v0.0.55-pre25)
+	- Tested on [v0.0.55-pre26](https://github.com/compujuckel/AssettoServer/releases/tag/v0.0.55-pre26)
 - UI and other plugin features may evolve — stay tuned for updates.
 
   ## Planned features
-  - Configurable finish line, so the plugin is not dependent on the track mod to have timing lines. Allowing users to define the start area and finish line themselves.
   - More rulesets.
-  - Improved lap validation.
+  - Improved lap/course validation to prevent cheating.
 

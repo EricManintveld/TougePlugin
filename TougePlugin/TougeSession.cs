@@ -1,6 +1,9 @@
 ﻿using AssettoServer.Server;
 using TougePlugin.Packets;
 using Serilog;
+using TougePlugin.Models;
+using TougePlugin.TougeRulesets;
+using TougePlugin.RaceTypes;
 
 namespace TougePlugin;
 
@@ -13,7 +16,7 @@ public class TougeSession
     private readonly int[] challengerStandings = [(int)RaceResultCounter.Tbd, (int)RaceResultCounter.Tbd, (int)RaceResultCounter.Tbd];
     private readonly int[] challengedStandings = [(int)RaceResultCounter.Tbd, (int)RaceResultCounter.Tbd, (int)RaceResultCounter.Tbd];
 
-    private const int coolDownTime = 6000; // Cooldown timer for inbetween races.
+    public const int coolDownTime = 6000; // Cooldown timer for inbetween races.
 
     private enum RaceResultCounter
     {
@@ -23,12 +26,14 @@ public class TougeSession
         Tie = 3,
     }
 
-    private enum HudState
+    public enum SessionState
     {
         Off = 0,
         FirstTwo = 1,
         SuddenDeath = 2,
         Finished = 3,
+        CatAndMouse = 4,
+        NoUpdate = 5,
     }
 
     public bool IsActive { get; private set; }
@@ -36,12 +41,16 @@ public class TougeSession
 
     private readonly EntryCarManager _entryCarManager;
     private readonly Touge _plugin;
-    private readonly Race.Factory _raceFactory;
+    public readonly Race.Factory _raceFactory;
+    public readonly Func<RaceType, IRaceType> _raceTypeFactory;
     private readonly TougeConfiguration _configuration;
+    private readonly ITougeRuleset _ruleset;
+    private readonly Course _course;
+    private readonly RaceType _raceType;
 
-    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged);
+    public delegate TougeSession Factory(EntryCar challenger, EntryCar challenged, ITougeRuleset ruleset, Course course, RaceType raceType);
 
-    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration)
+    public TougeSession(EntryCar challenger, EntryCar challenged, EntryCarManager entryCarManager, Touge plugin, Race.Factory raceFactory, TougeConfiguration configuration, ITougeRuleset ruleset, Func<RaceType, IRaceType> raceTypeFactory, Course course, RaceType raceType)
     {
         Challenger = challenger;
         Challenged = challenged;
@@ -49,6 +58,10 @@ public class TougeSession
         _plugin = plugin;
         _raceFactory = raceFactory;
         _configuration = configuration;
+        _ruleset = ruleset;
+        _raceTypeFactory = raceTypeFactory;
+        _course = course;
+        _raceType = raceType;
     }
 
     public Task StartAsync()
@@ -66,20 +79,11 @@ public class TougeSession
     {
         try
         {
-            // Do the first two races.
-            SendStandings(HudState.FirstTwo);
-            RaceResult result = await FirstTwoRaceAsync();
-
-            // If the result of the first two races is a tie, race until there is a winner.
-            if (result.Outcome == RaceOutcome.Tie)
-            {
-                SendStandings(HudState.SuddenDeath);
-                result = await RunSuddenDeathRacesAsync(result);
-            }
+            RaceResult result = await _ruleset.RunSessionAsync(this);
 
             if (result.Outcome != RaceOutcome.Disconnected)
             {
-                UpdateStandings(result.ResultCar!, 2, HudState.Finished);
+                UpdateStandings(result.ResultCar!, 2, SessionState.Finished);
                 UpdateEloAsync(result.ResultCar!);
 
                 EntryCar loser = result.ResultCar! == Challenged ? Challenger : Challenged;
@@ -98,103 +102,32 @@ public class TougeSession
         }
     }
 
-    private async Task<RaceResult> FirstTwoRaceAsync()
+    public async Task<RaceResult> RunRaceAsync(EntryCar leader, EntryCar follower)
     {
-        // Run race 1.
-        Race race1 = _raceFactory(Challenger, Challenged);
-        RaceResult result1 = await StartRaceAsync(race1);
+        IRaceType raceType = _raceTypeFactory(_raceType);
+        Race race = _raceFactory(leader, follower, raceType, _course);
+        ActiveRace = race;
+        RaceResult result = await race.RaceAsync();
+        ActiveRace = null;
 
-        // If both players are still connected. Run race 2.
-        if (result1.Outcome != RaceOutcome.Disconnected)
-        {
-            ApplyRaceResultToStandings(result1, 0);
-
-            // Always start second race.
-            await Task.Delay(coolDownTime); // Small cooldown time inbetween races.
-            Race race2 = _raceFactory(Challenged, Challenger);
-            RaceResult result2 = await StartRaceAsync(race2);
-
-            if (result2.Outcome != RaceOutcome.Disconnected)
-            {
-                ApplyRaceResultToStandings(result2, 1);
-                await Task.Delay(coolDownTime); // Small cooldown to keep scoreboard up.
-
-                // Both races are finished. Check what to return.
-                if (IsTie(result1, result2))
-                {
-                    return RaceResult.Tie();
-                }
-                else
-                {
-                    // Its either 0-1 or 0-2.
-                    return RaceResult.Win(result1.ResultCar!);
-                }
-            }
-            else
-            {
-                // Someone disconnected or forfeited.
-                // Check if they won the first race or not.
-                if (result1.Outcome == RaceOutcome.Win && result1.ResultCar != result2.ResultCar)
-                {
-                    // The player who disconnected was not leading the standings.
-                    // So the other player (who won race 1, is the overall winner)
-                    return RaceResult.Win(result1.ResultCar!);
-                }
-                return RaceResult.Disconnected(result2.ResultCar!);
-            }
-        }
-        return RaceResult.Disconnected(result1.ResultCar!);
+        return result;
     }
 
-    private void ApplyRaceResultToStandings(RaceResult result, int raceIndex)
+    public void ApplyRaceResultToStandings(RaceResult result, int raceIndex)
     {
         if (result.Outcome == RaceOutcome.Win)
         {
-            UpdateStandings(result.ResultCar!, raceIndex, HudState.FirstTwo);
+            UpdateStandings(result.ResultCar!, raceIndex);
             winCounter++;
         }
         else
         {
             // Tie case.
-            UpdateStandings(null, raceIndex, HudState.FirstTwo);
+            UpdateStandings(null, raceIndex);
         }
     }
 
-    private async Task<RaceResult> RunSuddenDeathRacesAsync(RaceResult firstTwoResult)
-    {
-        RaceResult result = firstTwoResult;
-        bool isChallengerLeading = true; // Challenger as leader at first.
-        bool isFirstSuddenDeathRace = true;
-        while (result.Outcome == RaceOutcome.Tie)
-        {
-            if (!isFirstSuddenDeathRace)
-            {
-                // Skip cooldown on the first iteration, because of cooldown after first two races.
-                await Task.Delay(coolDownTime);
-            }
-
-            // Swap the posistion of leader and follower.
-            EntryCar leader = isChallengerLeading ? Challenger : Challenged;
-            EntryCar follower = isChallengerLeading ? Challenged : Challenger;
-
-            Race race = _raceFactory(leader, follower);
-            result = await StartRaceAsync(race);
-
-            isChallengerLeading = !isChallengerLeading;
-            isFirstSuddenDeathRace = false;
-        }
-        return result;
-    }
-
-    private async Task<RaceResult> StartRaceAsync(Race race)
-    {
-        ActiveRace = race;
-        RaceResult result = await race.RaceAsync();
-        ActiveRace = null;
-        return result;
-    }
-
-    private bool IsTie(RaceResult r1, RaceResult r2)
+    public bool IsTie(RaceResult r1, RaceResult r2)
     {
         bool bothAreWins = r1.Outcome == RaceOutcome.Win && r2.Outcome == RaceOutcome.Win;
         bool differentWinners = r1.ResultCar != r2.ResultCar;
@@ -211,7 +144,7 @@ public class TougeSession
         // Turn off and reset hud
         Array.Fill(challengerStandings, (int)RaceResultCounter.Tbd);
         Array.Fill(challengedStandings, (int)RaceResultCounter.Tbd);
-        SendStandings(HudState.Off);
+        SendSessionState(SessionState.Off);
     }
 
     private async void UpdateEloAsync(EntryCar? winner)
@@ -289,7 +222,7 @@ public class TougeSession
         return performance;
     }
 
-    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, HudState hudState)
+    private void UpdateStandings(EntryCar? winner, int scoreboardIndex, SessionState hudState = SessionState.NoUpdate)
     {
         // Update the standings arrays
         // Maybe just store the winner in a list? Not 2. And figure out by Client how the score should be sent.
@@ -311,12 +244,12 @@ public class TougeSession
         }
 
         // Now update client side.
-        SendStandings(hudState);
+        SendSessionState(hudState);
     }
 
-    private void SendStandings(HudState hudState)
+    public void SendSessionState(SessionState hudState)
     {
-        Challenger.Client!.SendPacket(new StandingPacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], SuddenDeathResult = challengerStandings[2], HudState = (int)hudState });
-        Challenged.Client!.SendPacket(new StandingPacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], SuddenDeathResult = challengedStandings[2], HudState = (int)hudState });
+        Challenger.Client!.SendPacket(new SessionStatePacket { Result1 = challengerStandings[0], Result2 = challengerStandings[1], Result3 = challengerStandings[2], SessionState = (int)hudState });
+        Challenged.Client!.SendPacket(new SessionStatePacket { Result1 = challengedStandings[0], Result2 = challengedStandings[1], Result3 = challengedStandings[2], SessionState = (int)hudState });
     }
 }
