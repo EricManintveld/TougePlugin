@@ -102,27 +102,27 @@ IsRollingStart: false
 # Whether to use the track's built-in finish line as the course endpoint.
 UseTrackFinish: true
 # Outrun timer in seconds. Chase car has to finish within this amount of time after the lead car crosses the finish line.
-outrunTime: 3
+CourseOutrunTime: 1.5
 # Defines the ruleset used for touge sessions.
 RuleSetType: CatAndMouse
 # Whether players are allowed to challenge others to outrun races.
-EnableOutrunRace: false
+EnableOutrunRace: true
 # Whether players are allowed to challenge others to defined-finish-line (course) races.
-EnableCourseRace: false
+EnableCourseRace: true
 # The number of seconds the chase car has to cross the finish line after the lead car finishes.
 CourseOutrunTime: 30
 # Time limit in seconds for outrun races. If the leader stays ahead for this duration, they win.
-OutrunLeadTimeout: 3
+OutrunLeadTimeout: 120
 # Distance in meters the lead car must maintain to win in an outrun race.
-OutrunLeadDistance: 5
+OutrunLeadDistance: 750
 # Local database mode enabled. If disabled please provide database connection information.
-isDbLocalMode: true
+IsDbLocalMode: true
 # Connection string to PostgreSQL database. Can be left empty if isDbLocalMode = true.
-postgresqlConnectionString:
+PostgresqlConnectionString:
 # Toggles discrete mode for the HUD. In discrete mode, the HUD only appears when necessary.
 DiscreteMode: false
 # Your Steam API key. Not required. 
-SteamAPIKey:
+SteamAPIKey: 
 ```
 
 ---
