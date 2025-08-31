@@ -1,8 +1,6 @@
 local supportAPI_collision = physics.disableCarCollisions ~= nil
-local noInputAPI = physics.setCarNoInput ~= nil
+local lockInputAPI = physics.lockUserControlsFor ~= nil
 local vec = {x=vec3(1,0,0),y=vec3(0,1,0),z=vec3(0,0,1),empty=vec3(),empty2=vec2()}
-
-local teleportTimer = nil
 
 local function dir3FromHeading(heading)
     local h = math.rad(heading + ac.getCompassAngle(vec.z))
@@ -11,13 +9,10 @@ end
 
 function TeleportExec(pos, rot)
     if supportAPI_collision then physics.disableCarCollisions(0, true) end
-    if noInputAPI then physics.setCarNoInput(true) end
+    if lockInputAPI then physics.lockUserControlsFor(10) end
     pos.y = FindGroundY(pos)  -- Adjust y-coordinate to ground level
     rot.y = 0 -- Make sure the car is right side up.
     physics.setCarPosition(0, pos, rot)
-    
-    -- Start teleport timer
-    teleportTimer = 10
 end
 
 local teleportEvent = ac.OnlineEvent(
@@ -41,7 +36,14 @@ local lockControlsEvent = ac.OnlineEvent(
         lockControls = ac.StructItem.boolean(),
     },
     function (sender, message)
-        if noInputAPI then physics.setCarNoInput(message.lockControls) end
+        local lockTimer = 10
+        if message.lockControls == false then
+            lockTimer = 0
+        end
+
+        if lockInputAPI then
+            physics.lockUserControlsFor(lockTimer)
+        end
     end
 )
 
@@ -53,15 +55,5 @@ function FindGroundY(pos)
         return pos.y - distance
     else
         return pos.y  -- Fallback if no hit detected
-    end
-end
-
-function script.update(dt)
-    if teleportTimer then
-        teleportTimer = teleportTimer - dt
-        if teleportTimer <= 0 then
-            teleportTimer = nil
-            if supportAPI_collision then physics.disableCarCollisions(0, false) end
-        end
     end
 end
